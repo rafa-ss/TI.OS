@@ -12,6 +12,7 @@ import api from '../services/api';
 import { PageLoader } from '../components/Loading';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
 import { formatDate } from '../utils/format';
+import RecentMessagesCard from '../components/RecentMessagesCard';
 
 const PRIORITY_COLORS = { baixa: '#94a3b8', media: '#3b82f6', alta: '#f97316', urgente: '#e11d48' };
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -26,7 +27,6 @@ function StatCard({ icon: Icon, label, value, color = 'brand', sub, to }) {
 
   const inner = (
     <>
-    
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center
         bg-${color}-100 text-${color}-700
         dark:bg-${color}-900/30 dark:text-${color}-300 shrink-0`}>
@@ -161,7 +161,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+     
+
+      <div className="grid lg:grid-cols-3 gap-4">
+
+      {/* Mensagens recentes — caixa interativa do chat */}
+        <RecentMessagesCard />
+     
         <div className="card p-5">
           <h3 className="font-semibold mb-4 text-slate-800 dark:text-slate-100">Produtividade da equipe</h3>
           <div style={{ width: '100%', height: 260 }}>
@@ -207,4 +213,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
+} 

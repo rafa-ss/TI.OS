@@ -44,12 +44,25 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(mongoSanitize());
 app.use(compression());
 
-// Logs
+// Logs — pula as rotas de polling do chat para não poluir o terminal
 if (env.NODE_ENV !== 'test') {
-  app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
+  app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined', {
+    skip: (req) => {
+      const url = req.originalUrl || req.url || '';
+      return (
+        url.includes('/chat/contacts') ||
+        url.includes('/chat/messages') ||
+        url.includes('/chat/unread') ||
+        url.includes('/chat/read') ||
+        url.includes('/chat/presence') ||
+        url.includes('/notifications')
+      );
+    },
+  }));
 }
 
 // Rate limit (apenas API)
+// O /chat usa polling frequente (a cada 5-10s), então é excluído do limite.
 app.use(
   env.API_PREFIX,
   rateLimit({
@@ -57,6 +70,7 @@ app.use(
     max: env.RATE_LIMIT_MAX,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path.startsWith('/chat'),
     message: { success: false, message: 'Muitas requisições. Tente novamente mais tarde.' },
   })
 );

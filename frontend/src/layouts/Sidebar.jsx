@@ -1,18 +1,20 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, ClipboardList, MonitorSmartphone, School, Users,
-  BarChart3, Wrench, X
+  LayoutDashboard, ClipboardList, MonitorSmartphone,Package, School, Users,
+  BarChart3, FlaskConical, MessageCircle, UserCircle, X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'tecnico', 'atendente'] },
   { to: '/ordens', label: 'Ordens de Serviço', icon: ClipboardList, roles: ['admin', 'tecnico', 'atendente'] },
-  { to: '/equipamentos', label: 'Equipamentos', icon: Wrench, roles: ['admin', 'tecnico'] },
+  { to: '/laboratorios', label: 'Laboratórios', icon: MonitorSmartphone, roles: ['admin', 'tecnico'] },
+  { to: '/equipamentos', label: 'Equipamentos', icon: Package, roles: ['admin', 'tecnico'] },
+   { to: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'tecnico'] },
   { to: '/escolas', label: 'Escolas', icon: School, roles: ['admin', 'tecnico', 'atendente'] },
-  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'tecnico'] },
+  { to: '/chat', label: 'Chat da Equipe', icon: MessageCircle, roles: ['admin', 'tecnico', 'atendente'] },
   { to: '/usuarios', label: 'Usuários', icon: Users, roles: ['admin'] },
-  { to: '/laboratorios', label: 'Laboratórios', icon: MonitorSmartphone, roles: ['admin', 'tecnico'] }
+
 ];
 
 /**
@@ -42,18 +44,16 @@ export default function Sidebar({ open, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between lg:justify-center h-16 border-b border-slate-200 dark:border-slate-800 px-3">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-soft">
-        <div className="w-10 h-10 shrink-0 rounded-xl overflow-hidden bg-white shadow-soft flex items-center justify-center">
+          <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl">
   <img
-    src="/L1.png"
-    alt="Logo"
+    src="/navb2.png"
+    alt="CTEC"
     className="w-full h-full object-cover"
   />
 </div>
-            </div>
             <div className="lg:hidden">
-              <p className="font-bold text-slate-900 dark:text-white leading-tight">O.S. SEMEC</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Abaetetuba — T.I.</p>
+              <p className="font-bold text-slate-900 dark:text-white leading-tight">CTEC</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">SEMEC Abaetetuba</p>
             </div>
           </div>
           <button className="lg:hidden btn-ghost p-1.5" onClick={onClose}>

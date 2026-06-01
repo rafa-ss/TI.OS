@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Plus, Search, Pencil, Trash2, FlaskConical, Package,
+  Plus, Search, Pencil, Trash2, FlaskConical, Package,MonitorSmartphone,
   CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer, FileText, FileType,
   Wifi, Battery, Tablet, HelpCircle, AlertTriangle
 } from 'lucide-react';
@@ -125,7 +125,7 @@ export default function Laboratories() {
       {/* Cards de resumo */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total" value={summary.total} color="brand" icon={FlaskConical}
+          <StatCard label="Total" value={summary.total} color="brand" icon={MonitorSmartphone}
             onClick={() => setFilters({ q: '', status: '', page: 1, limit: 10 })}/>
           <StatCard label="Concluídos" value={summary.concluidos} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, status: 'concluido', page: 1 }))}/>

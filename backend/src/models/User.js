@@ -20,7 +20,9 @@ const userSchema = new mongoose.Schema(
     active: { type: Boolean, default: true, index: true },
     phone: { type: String, default: '' },
     avatarUrl: { type: String, default: '' },
+    avatarMeta: { type: mongoose.Schema.Types.Mixed, default: null }, // metadados pra deletar do storage
     lastLoginAt: { type: Date },
+    lastSeenAt: { type: Date }, // ping de presença para status online/offline
   },
   { timestamps: true }
 );

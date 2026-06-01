@@ -6,11 +6,13 @@ import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import Equipment from './pages/Equipment';
+import Laboratories from './pages/Laboratories';
+import Chat from './pages/Chat';
+import Profile from './pages/Profile';
 import EquipmentDetail from './pages/EquipmentDetail';
 import Schools from './pages/Schools';
 import Users from './pages/Users';
 import Reports from './pages/Reports';
-import Laboratories from './pages/Laboratories';
 
 export default function App() {
   return (
@@ -29,11 +31,13 @@ export default function App() {
         <Route path="ordens" element={<Orders />} />
         <Route path="ordens/:id" element={<OrderDetail />} />
         <Route path="equipamentos" element={<ProtectedRoute roles={['admin','tecnico']}><Equipment /></ProtectedRoute>} />
+        <Route path="laboratorios" element={<ProtectedRoute roles={['admin','tecnico']}><Laboratories /></ProtectedRoute>} />
         <Route path="equipamentos/:id" element={<ProtectedRoute roles={['admin','tecnico']}><EquipmentDetail /></ProtectedRoute>} />
         <Route path="escolas" element={<Schools />} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="perfil" element={<Profile />} />
         <Route path="relatorios" element={<ProtectedRoute roles={['admin','tecnico']}><Reports /></ProtectedRoute>} />
         <Route path="usuarios" element={<ProtectedRoute roles={['admin']}><Users /></ProtectedRoute>} />
-        <Route path="laboratorios" element={<ProtectedRoute roles={['admin','tecnico']}><Laboratories /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
