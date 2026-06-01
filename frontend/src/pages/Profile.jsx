@@ -8,7 +8,7 @@ import AvatarCropper from '../components/AvatarCropper';
 import { ROLE_LABEL } from '../utils/format';
 
 export default function Profile() {
-  const { user, reload } = useAuth();
+  const { user, reload, updateUser } = useAuth();
   const fileInputRef = useRef(null);
 
   const [name, setName] = useState('');
@@ -55,10 +55,17 @@ export default function Profile() {
     try {
       const fd = new FormData();
       fd.append('file', croppedFile);
-      await api.post('/users/me/avatar', fd, {
+      const { data } = await api.post('/users/me/avatar', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      // Cache-buster na URL — força o navegador a baixar a imagem nova
+      const freshUrl = data.user.avatarUrl
+        ? `${data.user.avatarUrl}${data.user.avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`
+        : '';
+      // Atualiza o user em memória IMEDIATAMENTE
+      updateUser({ ...data.user, avatarUrl: freshUrl });
       toast.success('Foto atualizada!');
+      // E também busca do backend pra garantir consistência
       reload?.();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Erro ao enviar foto');
@@ -68,7 +75,8 @@ export default function Profile() {
   async function removeAvatar() {
     if (!confirm('Remover sua foto de perfil?')) return;
     try {
-      await api.delete('/users/me/avatar');
+      const { data } = await api.delete('/users/me/avatar');
+      updateUser(data.user);
       toast.success('Foto removida');
       reload?.();
     } catch (err) {
@@ -95,7 +103,7 @@ export default function Profile() {
   if (!user) return null;
 
   return (
-   <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Meu Perfil</h1>
         <p className="text-sm text-slate-500">Atualize sua foto, dados de contato e senha.</p>

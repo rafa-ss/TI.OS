@@ -14,7 +14,11 @@ export function AuthProvider({ children }) {
       return;
     }
     try {
-      const { data } = await api.get('/auth/me');
+      // Cache-buster: força o navegador a buscar do servidor sempre
+      const { data } = await api.get('/auth/me', {
+        params: { _t: Date.now() },
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       setUser(data.user);
     } catch {
       localStorage.removeItem('os_token');
@@ -43,8 +47,20 @@ export function AuthProvider({ children }) {
 
   const hasRole = (...roles) => user && roles.includes(user.role);
 
+  /**
+   * Atualiza o usuário em memória imediatamente (sem ir ao backend).
+   * Usado quando já temos a resposta nova vinda de uma ação (ex.: upload de avatar).
+   */
+  function updateUser(partial) {
+    setUser((u) => (u ? { ...u, ...partial } : u));
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, hasRole, reload: loadMe }}>
+    <AuthContext.Provider value={{
+      user, loading, login, logout, hasRole,
+      reload: loadMe,
+      updateUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
