@@ -12,7 +12,7 @@ const {
   Document, Packer, Paragraph, TextRun, AlignmentType, Header, Footer,
   Table, TableRow, TableCell, WidthType, ShadingType, ImageRun,
 } = require('docx');
-const Laboratory = require('../models/Laboratory-model');
+const Laboratory = require('../models/Laboratory');
 const Counter = require('../models/Counter');
 
 // ====================================================================

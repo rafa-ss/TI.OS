@@ -72,7 +72,7 @@ function buildDeliveryTermPdf({ equipment, movement }) {
 
       const fromTxt = movement.fromSchool?.name
         ? `${movement.fromSchool.name} (INEP ${movement.fromSchool.inep || '-'})`
-        : (movement.fromLocation || 'Almoxarifado / SEMED');
+        : (movement.fromLocation || 'Almoxarifado / semec');
       const toTxt = movement.toSchool?.name
         ? `${movement.toSchool.name} (INEP ${movement.toSchool.inep || '-'})`
         : (movement.toLocation || '—');
@@ -120,8 +120,8 @@ function buildDeliveryTermPdf({ equipment, movement }) {
       doc.moveDown(0.3);
       doc.font('Helvetica').fontSize(10).fillColor('#1e293b').text(
         isReturn
-          ? `Pelo presente termo, o(a) servidor(a) abaixo identificado(a) DEVOLVE o equipamento à equipe de T.I. da SEMED Abaetetuba, atestando seu estado de conservação no momento da devolução.`
-          : `Pelo presente termo, o(a) responsável abaixo identificado(a) RECEBE o equipamento acima descrito, comprometendo-se a zelar por sua guarda, conservação e uso adequado, bem como a comunicar imediatamente à equipe de T.I. da SEMED qualquer dano, extravio ou necessidade de manutenção.`,
+          ? `Pelo presente termo, o(a) servidor(a) abaixo identificado(a) DEVOLVE o equipamento à equipe de T.I. da semec Abaetetuba, atestando seu estado de conservação no momento da devolução.`
+          : `Pelo presente termo, o(a) responsável abaixo identificado(a) RECEBE o equipamento acima descrito, comprometendo-se a zelar por sua guarda, conservação e uso adequado, bem como a comunicar imediatamente à equipe de T.I. da semec qualquer dano, extravio ou necessidade de manutenção.`,
         { align: 'justify' }
       );
 
@@ -147,11 +147,11 @@ function buildDeliveryTermPdf({ equipment, movement }) {
       doc.moveTo(330, sigY).lineTo(525, sigY).stroke();
       doc.fontSize(9).fillColor('#475569')
         .text('Recebedor', 70, sigY + 5, { width: 195, align: 'center' })
-        .text('Responsável T.I. / SEMED', 330, sigY + 5, { width: 195, align: 'center' });
+        .text('Responsável T.I. / semec', 330, sigY + 5, { width: 195, align: 'center' });
 
       doc.moveDown(4);
       doc.fontSize(8).fillColor('#94a3b8')
-        .text(`Abaetetuba/PA, ${new Date().toLocaleDateString('pt-BR')} — Documento gerado eletronicamente pelo Sistema de O.S. da SEMED.`, { align: 'center' });
+        .text(`Abaetetuba/PA, ${new Date().toLocaleDateString('pt-BR')} — Documento gerado eletronicamente pelo Sistema de O.S. da semec.`, { align: 'center' });
 
       doc.end();
     } catch (err) {

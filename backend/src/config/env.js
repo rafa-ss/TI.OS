@@ -25,7 +25,7 @@ const env = {
   RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '300', 10),
 
  SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME || 'Administrador',
- SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL || 'admin@semed.abaetetuba.pa.gov.br',
+ SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL || 'admin@semec.abaetetuba.pa.gov.br',
  SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD || 'Admin@123',
 };
 

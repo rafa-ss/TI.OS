@@ -23,9 +23,14 @@ const createSchema = z.object({
   diagnosis: z.string().optional().default(''),
   serviceDone: z.string().optional().default(''),
   technician: z.string().optional(),
+  helpers: z.array(z.string()).optional(),
   priority: z.enum(PRIORITY).optional().default('media'),
   status: z.enum(STATUS).optional().default('aberta'),
   dueDate: z.string().optional(),
+  // === Campos de migração (apenas admin pode usar) ===
+  number: z.string().optional(),       // permite reaproveitar número de OS antiga
+  openedAt: z.string().optional(),     // data de abertura customizada
+  closedAt: z.string().optional(),     // data de conclusão customizada
 });
 
 const updateSchema = createSchema.partial();

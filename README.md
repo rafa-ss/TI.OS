@@ -1,4 +1,4 @@
-# 🛠️ Sistema de Ordens de Serviço — SEMED Abaetetuba (T.I.)
+# 🛠️ Sistema de Ordens de Serviço — semec Abaetetuba (T.I.)
 
 Aplicação web completa para gestão de chamados, manutenção de equipamentos e produtividade da equipe de Tecnologia da Informação da Secretaria Municipal de Educação de Abaetetuba.
 
@@ -78,7 +78,7 @@ npm run dev
 ✔ Um usuário admin é criado automaticamente:
 
 ```
-Email:  admin@semed.abaetetuba.pa.gov.br
+Email:  admin@semec.abaetetuba.pa.gov.br
 Senha:  Admin@123
 ```
 
@@ -192,7 +192,7 @@ Acesse http://localhost:5173 e use as credenciais acima.
 2. **Build command**: `npm install`
 3. **Start command**: `npm start`
 4. Configure todas as variáveis do `.env.example`.
-5. **CORS_ORIGIN** = URL do frontend (ex.: `https://os-semed.vercel.app`).
+5. **CORS_ORIGIN** = URL do frontend (ex.: `https://os-semec.vercel.app`).
 
 ### Frontend (Vercel)
 

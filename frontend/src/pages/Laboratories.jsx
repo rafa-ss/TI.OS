@@ -571,7 +571,7 @@ function DeactivateModal({ lab, onClose, onDone }) {
             ⚠️ Você vai desativar o laboratório <b>"{lab.name}"</b>
           </p>
           <p className="text-amber-700 dark:text-amber-300">
-            <b>{total} equipamento(s)</b> serão devolvidos ao estoque do Almoxarifado SEMED.
+            <b>{total} equipamento(s)</b> serão devolvidos ao estoque do Almoxarifado semec.
           </p>
         </div>
         <div>

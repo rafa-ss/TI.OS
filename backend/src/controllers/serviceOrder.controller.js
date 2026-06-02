@@ -11,7 +11,8 @@ const orderPdfService = require('../services/orderPdf.service');
 const populateRefs = [
   { path: 'school', select: 'name inep municipio' },
   { path: 'equipment', select: 'patrimonio type brand model' },
-  { path: 'technician', select: 'name email role' },
+  { path: 'technician', select: 'name email role avatarUrl' },
+  { path: 'helpers', select: 'name email role avatarUrl' },
   { path: 'createdBy', select: 'name email role' },
   { path: 'comments.author', select: 'name role' },
   { path: 'history.user', select: 'name role' },
@@ -102,7 +103,9 @@ exports.list = asyncHandler(async (req, res) => {
   // Filtro de visibilidade por perfil
   applyRoleFilter(filter, req.user);
 
-  const pagination = getPagination(req.query);
+  // Ordenação padrão: data de abertura mais recente primeiro.
+  // O usuário ainda pode sobrescrever passando ?sort=... &order=asc|desc na query.
+  const pagination = getPagination({ sort: 'openedAt', order: 'desc', ...req.query });
   const data = await paginate(ServiceOrder, filter, pagination, populateRefs);
   res.json({ success: true, ...data });
 });
@@ -146,11 +149,34 @@ async function resolveSchoolAndEquipment(body) {
 exports.create = asyncHandler(async (req, res) => {
   const body = await resolveSchoolAndEquipment({ ...req.body });
   body.createdBy = req.user._id;
-  body.status = 'aberta';
+
+  // ===== Campos especiais de MIGRAÇÃO — só admin pode passar =====
+  const isMigration = req.user.role === 'admin' &&
+    (body.number || body.openedAt || body.closedAt || (body.status && body.status !== 'aberta'));
+
+  if (req.user.role !== 'admin') {
+    delete body.number;
+    delete body.openedAt;
+    delete body.closedAt;
+    body.status = 'aberta';
+  } else {
+    // Admin: garante que number não duplique
+    if (body.number) {
+      const exists = await ServiceOrder.findOne({ number: body.number.trim() });
+      if (exists) throw new AppError(`Já existe O.S. com o número "${body.number}"`, 409);
+      body.number = body.number.trim();
+    }
+    if (body.openedAt) body.openedAt = new Date(body.openedAt);
+    if (body.closedAt) body.closedAt = new Date(body.closedAt);
+    if (!body.status) body.status = 'aberta';
+  }
+
   body.history = [{
     user: req.user._id,
-    action: 'created',
-    note: `O.S. criada por ${req.user.name} (${req.user.role})`,
+    action: isMigration ? 'migrated' : 'created',
+    note: isMigration
+      ? `O.S. importada de sistema anterior por ${req.user.name}`
+      : `O.S. criada por ${req.user.name} (${req.user.role})`,
   }];
 
   const os = await ServiceOrder.create(body);
@@ -202,9 +228,26 @@ exports.update = asyncHandler(async (req, res) => {
   }
 
   const body = await resolveSchoolAndEquipment({ ...req.body });
+
+  // ===== Campos de migração — só admin pode alterar =====
+  if (req.user.role !== 'admin') {
+    delete body.number;
+    delete body.openedAt;
+    delete body.closedAt;
+  } else {
+    if (body.number && body.number.trim() !== os.number) {
+      const dup = await ServiceOrder.findOne({ number: body.number.trim(), _id: { $ne: os._id } });
+      if (dup) throw new AppError(`Já existe outra O.S. com o número "${body.number}"`, 409);
+      body.number = body.number.trim();
+    }
+    if (body.openedAt) body.openedAt = new Date(body.openedAt);
+    if (body.closedAt) body.closedAt = new Date(body.closedAt);
+  }
+
   const trackedFields = [
     'status', 'priority', 'technician', 'diagnosis',
     'serviceDone', 'dueDate', 'problemReported', 'equipmentType', 'serviceType',
+    'number', 'openedAt', 'closedAt', 'helpers',
   ];
   const changes = [];
   trackedFields.forEach((f) => {

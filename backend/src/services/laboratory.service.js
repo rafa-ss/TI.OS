@@ -58,7 +58,7 @@ async function debitStock(equipments) {
  * Devolve quantidades ao estoque (cria/incrementa lotes).
  * Usado quando um laboratório é desativado ou cancelado.
  */
-async function returnToStock(equipments, location = 'Almoxarifado SEMED', notes = '') {
+async function returnToStock(equipments, location = 'Almoxarifado semec', notes = '') {
   for (const eq of equipments) {
     // Tenta achar lote existente do mesmo tipo/condição/local
     const existing = await StockItem.findOne({

@@ -2,12 +2,10 @@
  * Ajusta o contador de Ordens de Serviço para começar a partir de um número.
  *
  * Uso:
- *   node src/utils/setOrderCounter.js 80           # próxima O.S. será 80 (ano atual)
- *   node src/utils/setOrderCounter.js 80 2026      # próxima O.S. será 80 do ano 2026
+ *   node src/utils/setOrderCounter.js 15           # próxima O.S. será 15/ano-atual
+ *   node src/utils/setOrderCounter.js 15 2026      # próxima O.S. será 15/2026
  *
- * IMPORTANTE: o próximo número gerado será EXATAMENTE o que você passar.
- * Internamente, o counter é setado para (N - 1), porque o save() incrementa
- * antes de usar.
+ * Formato gerado: NN/YYYY  (ex.: 15/2026)
  */
 const mongoose = require('mongoose');
 const env = require('../config/env');
@@ -19,7 +17,7 @@ async function run() {
 
   if (!target || target < 1) {
     console.error('❌ Uso: node src/utils/setOrderCounter.js <numero> [ano]');
-    console.error('   Ex.: node src/utils/setOrderCounter.js 80');
+    console.error('   Ex.: node src/utils/setOrderCounter.js 15');
     process.exit(1);
   }
 
@@ -36,7 +34,7 @@ async function run() {
   );
 
   console.log(`✅ Contador "${counterId}" ajustado.`);
-  console.log(`   Próxima O.S. criada em ${year} será: OS-${year}-${String(target).padStart(5, '0')}`);
+  console.log(`   Próxima O.S. criada em ${year} será: ${String(target).padStart(2, '0')}/${year}`);
   console.log(`   (valor interno do contador: ${result.seq})`);
 
   await mongoose.disconnect();

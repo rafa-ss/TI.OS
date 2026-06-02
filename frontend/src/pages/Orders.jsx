@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, FileDown, FileText, Printer, Play, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, FileDown, FileText, Printer, Play, Trash2, Archive, AlertCircle, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
 import { formatDate } from '../utils/format';
 import OrderFormModal from './OrderFormModal';
+import MigrateOrderModal from './MigrateOrderModal';
 
 const STATUS_OPTIONS = [
   { v: '', l: 'Todos status' },
@@ -35,8 +36,10 @@ export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [openCount, setOpenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
   // Inicializa os filtros a partir da URL — assim a navegação vinda do dashboard
@@ -65,9 +68,14 @@ export default function Orders() {
     setLoading(true);
     try {
       const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ''));
-      const { data } = await api.get('/orders', { params });
-      setItems(data.items);
-      setPagination(data.pagination);
+      const [list, abertas] = await Promise.all([
+        api.get('/orders', { params }),
+        // busca total de abertas (sem aplicar filtros locais)
+        api.get('/orders', { params: { status: 'aberta', limit: 1, page: 1 } }),
+      ]);
+      setItems(list.data.items);
+      setPagination(list.data.pagination);
+      setOpenCount(abertas.data.pagination?.total || 0);
     } finally { setLoading(false); }
   }, [filters]);
 
@@ -163,13 +171,57 @@ export default function Orders() {
           </p>
         </div>
         <div className="flex gap-2">
-        {/*  <button className="btn-secondary" onClick={() => exportFile('excel')}><FileDown size={16}/> Excel</button>
-          <button className="btn-secondary" onClick={() => exportFile('pdf')}><FileText size={16}/> PDF</button> */}
+          <button className="btn-secondary" onClick={() => exportFile('excel')}><FileDown size={16}/> Excel</button>
+          <button className="btn-secondary" onClick={() => exportFile('pdf')}><FileText size={16}/> PDF</button>
+          {hasRole('admin') && (
+            <button className="btn-secondary"
+              onClick={() => setMigrateOpen(true)}
+              title="Importar O.S. de sistema anterior"
+            >
+              <Archive size={16}/> Importar O.S.
+            </button>
+          )}
           <button className="btn-primary" onClick={() => { setEditing(null); setOpenForm(true); }}>
             <Plus size={16}/> Nova O.S.
           </button>
         </div>
       </div>
+
+      {/* Banner de O.S. aguardando atendimento */}
+      {openCount > 0 && filters.status !== 'aberta' && (
+        <button
+          onClick={() => setFilters(f => ({ ...f, status: 'aberta', page: 1 }))}
+          className="w-full card p-4 border-l-4 border-l-pref-vermelho-500 bg-pref-vermelho-50 dark:bg-pref-vermelho-900/15 hover:bg-pref-vermelho-100 dark:hover:bg-pref-vermelho-900/25 transition flex items-center gap-3 text-left"
+        >
+          <div className="w-10 h-10 rounded-full bg-pref-vermelho-500 text-white flex items-center justify-center shrink-0 animate-pulse">
+            <AlertCircle size={18}/>
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-pref-vermelho-700 dark:text-pref-vermelho-200">
+              {openCount === 1
+                ? '1 ordem de serviço aguardando atendimento'
+                : `${openCount} ordens de serviço aguardando atendimento`}
+            </p>
+            <p className="text-xs text-pref-vermelho-600 dark:text-pref-vermelho-300">
+              {hasRole('admin','tecnico')
+                ? 'Clique para visualizar e iniciar o atendimento'
+                : 'Aguardando técnico iniciar o atendimento'}
+            </p>
+          </div>
+          <ArrowRight size={20} className="text-pref-vermelho-500 shrink-0"/>
+        </button>
+      )}
+
+      {openCount === 0 && (
+        <div className="card p-3 bg-emerald-50/60 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            ✓
+          </div>
+          <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+            Nenhuma ordem aguardando atendimento no momento.
+          </p>
+        </div>
+      )}
 
       <div className="card p-4">
         <div className="grid md:grid-cols-5 gap-3">
@@ -290,6 +342,12 @@ export default function Orders() {
         onClose={() => setOpenForm(false)}
         order={editing}
         onSaved={() => { setOpenForm(false); load(); }}
+      />
+
+      <MigrateOrderModal
+        open={migrateOpen}
+        onClose={() => setMigrateOpen(false)}
+        onSaved={() => { setMigrateOpen(false); load(); }}
       />
     </div>
   );

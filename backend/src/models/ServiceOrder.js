@@ -91,6 +91,7 @@ const serviceOrderSchema = new mongoose.Schema(
     serviceDone: { type: String, default: '' },
 
     technician: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    helpers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // técnicos auxiliares (vários)
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
     priority: { type: String, enum: PRIORITY, default: 'media', index: true },
@@ -121,7 +122,8 @@ serviceOrderSchema.pre('save', async function (next) {
   if (this.isNew && !this.number) {
     const year = new Date().getFullYear();
     const seq = await Counter.next(`os_${year}`);
-    this.number = `OS-${year}-${String(seq).padStart(5, '0')}`;
+    // Formato: NN/YYYY (ex.: 15/2026)
+    this.number = `${String(seq).padStart(2, '0')}/${year}`;
   }
   next();
 });

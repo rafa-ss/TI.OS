@@ -264,9 +264,25 @@ export default function OrderDetail() {
             <Info label="Contato" value={[order.requesterPhone, order.requesterEmail].filter(Boolean).join(' • ') || '-'} />
             <Info label="Escola" value={order.school?.name || '-'} />
             <Info label="INEP" value={order.inep || order.school?.inep || '-'} />
-            <Info label="Equipamento" value={EQUIPMENT_TYPE_LABEL[order.equipmentType] || order.equipmentType || '-'} />
+            <Info
+              label={(order.equipmentType || '').includes(',') ? 'Equipamentos' : 'Equipamento'}
+              value={
+                (order.equipmentType || '')
+                  .split(',').map(t => t.trim()).filter(Boolean)
+                  .map(t => EQUIPMENT_TYPE_LABEL[t] || t)
+                  .join(', ') || '-'
+              }
+            />
             <Info label="Tipo de serviço" value={SERVICE_TYPE_LABEL[order.serviceType] || order.serviceType || '-'} />
             <Info label="Técnico responsável" value={order.technician?.name || <span className="text-slate-400 italic">aguardando início</span>} />
+            <Info
+              label="Técnico(s) auxiliar(es)"
+              value={
+                (order.helpers && order.helpers.length > 0)
+                  ? order.helpers.map(h => h.name).join(', ')
+                  : <span className="text-slate-400 italic">nenhum</span>
+              }
+            />
             <Info label="Conclusão" value={formatDate(order.closedAt)} />
           </div>
 

@@ -161,23 +161,36 @@ export default function Dashboard() {
         </div>
       </div>
 
-     
-
       <div className="grid lg:grid-cols-3 gap-4">
 
-      {/* Mensagens recentes — caixa interativa do chat */}
-        <RecentMessagesCard />
-     
-        <div className="card p-5">
-          <h3 className="font-semibold mb-4 text-slate-800 dark:text-slate-100">Produtividade da equipe</h3>
-          <div style={{ width: '100%', height: 260 }}>
-            <ResponsiveContainer>
-              <BarChart data={data.productivity}>
+        {/* Card 3: Mensagens recentes — altura igual aos outros */}
+        <div className="h-[440px]">
+          <RecentMessagesCard />
+        </div>
+
+        {/* Card 1: Produtividade — define a altura base dos demais */}
+        <div className="card p-4 h-[440px] flex flex-col">
+          <h3 className="font-semibold mb-2 text-slate-800 dark:text-slate-100">Produtividade da equipe</h3>
+          <div className="flex-1 min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.productivity}
+                margin={{ top: 10, right: 12, left: -10, bottom: 28 }}
+                barCategoryGap="25%"
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#94a3b822" />
-                <XAxis dataKey="technician" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={{ background: '#0f172a', border: 'none', color: '#fff', borderRadius: 8 }} />
-                <Legend />
+                <XAxis
+                  dataKey="technician"
+                  stroke="#94a3b8"
+                  tick={{ fontSize: 11 }}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: '#0f172a', border: 'none', color: '#fff', borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
                 <Bar dataKey="finalizadas" fill="#10b981" radius={[6,6,0,0]} />
                 <Bar dataKey="total" fill="#3b82f6" radius={[6,6,0,0]} />
               </BarChart>
@@ -185,11 +198,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        {/* Card 2: Últimas O.S. — altura igual ao card de produtividade */}
+        <div className="card overflow-hidden h-[440px] flex flex-col">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">Últimas O.S.</h3>
             <Link to="/ordens" className="text-xs text-brand-600 hover:underline">ver todas</Link>
           </div>
+          <div className="flex-1 overflow-y-auto">
           <table className="table-modern">
             <thead>
               <tr><th>Nº</th><th>Escola</th><th>Status</th><th>Prioridade</th><th>Abertura</th></tr>
@@ -209,8 +224,11 @@ export default function Dashboard() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
+
+        
       </div>
     </div>
   );
-} 
+}

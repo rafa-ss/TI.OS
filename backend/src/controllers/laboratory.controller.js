@@ -1,5 +1,5 @@
 const asyncHandler = require('../utils/asyncHandler');
-const Laboratory = require('../models/Laboratory-model');
+const Laboratory = require('../models/Laboratory');
 const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
 const labService = require('../services/laboratory.service');
@@ -107,7 +107,7 @@ exports.remove = asyncHandler(async (req, res) => {
   if (!lab.returnedToStock && lab.equipments.length > 0) {
     await labService.returnToStock(
       lab.equipments,
-      'Almoxarifado SEMED',
+      'Almoxarifado semec',
       `Devolução por exclusão do laboratório: ${lab.name}`
     );
   }
@@ -129,7 +129,7 @@ exports.deactivate = asyncHandler(async (req, res) => {
   if (lab.equipments.length > 0) {
     await labService.returnToStock(
       lab.equipments,
-      'Almoxarifado SEMED',
+      'Almoxarifado semec',
       `Retorno do laboratório "${lab.name}" - ${req.body.note || 'desativado'}`
     );
   }

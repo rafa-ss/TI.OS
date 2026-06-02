@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Plus, Search, Pencil, Trash2, Package, Wrench, CheckCircle2,
-  Monitor, Laptop, Printer, Wifi, Battery, Tablet, HelpCircle, Minus
+  Monitor, Laptop, Printer, Wifi, Battery, Tablet, HelpCircle, Minus, Mouse, Keyboard, Cable, MemoryStick, Plug, Power
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { TableSkeleton } from '../components/Loading';
 import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
-import { EQUIPMENT_TYPE_LABEL } from '../utils/format';
+import { EQUIPMENT_TYPE_LABEL, typeLabel } from '../utils/format';
 
-const TYPES = ['computador','notebook','impressora','roteador','nobreak','tablet','outro'];
+const TYPES = [
+  'computador','notebook','impressora','roteador','nobreak','tablet',
+  'mouse','teclado','estabilizador','caixa_cabo_rj45','monitor','memoria_ram','fonte',
+  'outro'
+];
 
 const CONDITIONS = [
   { v: 'novo', l: 'Novo', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
@@ -25,6 +29,13 @@ const TYPE_ICONS = {
   roteador: Wifi,
   nobreak: Battery,
   tablet: Tablet,
+  mouse: Mouse,
+  teclado: Keyboard,
+  estabilizador: Plug,
+  caixa_cabo_rj45: Cable,
+  monitor: Monitor,
+  memoria_ram: MemoryStick,
+  fonte: Power,
   outro: HelpCircle,
 };
 
@@ -35,6 +46,7 @@ export default function Equipment() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [allTypes, setAllTypes] = useState(TYPES);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +63,11 @@ export default function Equipment() {
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/stock/types').then(r => {
+      if (r.data.items?.length) setAllTypes(r.data.items);
+    }).catch(() => {});
+  }, []);
 
   async function remove(id) {
     if (!confirm('Remover este lote do estoque?')) return;
@@ -76,7 +93,7 @@ export default function Equipment() {
           <p className="text-sm text-slate-500">Controle simplificado das quantidades em estoque.</p>
         </div>
         <button onClick={() => { setEditing(null); setOpen(true); }} className="btn-primary">
-          <Plus size={16}/> Novo
+          <Plus size={16}/> Novo lote
         </button>
       </div>
 
@@ -98,8 +115,8 @@ export default function Equipment() {
       {summary?.byType?.length > 0 && (
         <div className="card p-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Quantidade por tipo</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {TYPES.map(t => {
+          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
+            {allTypes.map(t => {
               const Icon = TYPE_ICONS[t] || HelpCircle;
               const qty = summary.byType.find(x => x._id === t)?.total || 0;
               return (
@@ -107,7 +124,7 @@ export default function Equipment() {
                   onClick={() => setFilters(f => ({ ...f, type: t }))}
                   className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-400 hover:shadow-sm transition cursor-pointer">
                   <Icon size={22} className="text-brand-600 mb-1"/>
-                  <p className="text-xs text-slate-500">{EQUIPMENT_TYPE_LABEL[t]}</p>
+                  <p className="text-xs text-slate-500">{typeLabel(t)}</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white">{qty}</p>
                 </button>
               );
@@ -125,7 +142,7 @@ export default function Equipment() {
         </div>
         <select className="input" value={filters.type} onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}>
           <option value="">Todos os tipos</option>
-          {TYPES.map(t => <option key={t} value={t}>{EQUIPMENT_TYPE_LABEL[t]}</option>)}
+          {allTypes.map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}
         </select>
         <select className="input" value={filters.condition} onChange={e => setFilters(f => ({ ...f, condition: e.target.value }))}>
           <option value="">Todas as condições</option>
@@ -157,7 +174,7 @@ export default function Equipment() {
                       <td>
                         <div className="flex items-center gap-2">
                           <Icon size={18} className="text-brand-600"/>
-                          <span className="font-semibold">{EQUIPMENT_TYPE_LABEL[it.type]}</span>
+                          <span className="font-semibold">{typeLabel(it.type)}</span>
                         </div>
                       </td>
                       <td><span className={`badge ${cond?.color || ''}`}>{cond?.l || it.condition}</span></td>
@@ -220,13 +237,18 @@ function StatCard({ label, value, color, icon: Icon, onClick }) {
 // Formulário simples — Novo / Editar lote de estoque
 // =============================================================
 function StockForm({ open, onClose, item, onSaved }) {
-  const empty = { type: 'computador', condition: 'novo', quantity: 1, location: 'Coordenação de Tecnologia Educacional', notes: '' };
+  const empty = { type: 'computador', condition: 'novo', quantity: 1, location: 'Coordenação de tecnologia educacional', notes: '' };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [availableTypes, setAvailableTypes] = useState(TYPES);
 
   useEffect(() => {
     if (!open) return;
     setForm(item ? { ...empty, ...item } : empty);
+    // busca lista atualizada de tipos (padrões + os customizados já cadastrados)
+    api.get('/stock/types').then(r => {
+      setAvailableTypes(r.data.items?.length ? r.data.items : TYPES);
+    }).catch(() => setAvailableTypes(TYPES));
     // eslint-disable-next-line
   }, [open, item]);
 
@@ -257,15 +279,34 @@ function StockForm({ open, onClose, item, onSaved }) {
       </>}>
       <form onSubmit={submit} className="space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Cadastre um lote de equipamentos. 
+          Cadastre um lote de equipamentos. Ex.: <i>"30 computadores novos no almoxarifado"</i>.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Tipo *</label>
-            <select className="input" value={form.type} onChange={e => set('type', e.target.value)}>
-              {TYPES.map(t => <option key={t} value={t}>{EQUIPMENT_TYPE_LABEL[t]}</option>)}
-            </select>
+            <input
+              className="input"
+              list="stock-types-list"
+              required
+              placeholder="Selecione ou digite um tipo novo"
+              value={form.type ? typeLabel(form.type) : ''}
+              onChange={e => {
+                // Quando o usuário digita ou escolhe da lista,
+                // normalizamos: minúsculo, troca espaço por underscore
+                const raw = e.target.value || '';
+                const norm = raw.toLowerCase().trim().replace(/\s+/g, '_');
+                set('type', norm);
+              }}
+            />
+            <datalist id="stock-types-list">
+              {availableTypes.map(t => (
+                <option key={t} value={typeLabel(t)}/>
+              ))}
+            </datalist>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Não está na lista? É só digitar — o novo tipo será salvo automaticamente.
+            </p>
           </div>
           <div>
             <label className="label">Condição *</label>
@@ -289,7 +330,7 @@ function StockForm({ open, onClose, item, onSaved }) {
 
         <div>
           <label className="label">Local de armazenamento</label>
-          <input className="input" placeholder="Ex.: Almoxarifado CTEC" value={form.location}
+          <input className="input" placeholder="Ex.: Almoxarifado SEMED" value={form.location}
             onChange={e => set('location', e.target.value)}/>
         </div>
 

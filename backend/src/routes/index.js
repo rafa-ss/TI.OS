@@ -10,6 +10,7 @@ router.use('/orders', require('./serviceOrder.routes'));
 router.use('/dashboard', require('./dashboard.routes'));
 router.use('/reports', require('./report.routes'));
 router.use('/chat', require('./chat.routes'));
+router.use('/staff-reports', require('./staffReport.routes'));
 router.use('/notifications', require('./notification.routes'));
 
 router.get('/health', (_req, res) =>

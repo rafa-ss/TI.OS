@@ -6,6 +6,7 @@ router.use(authenticate);
 
 router.get('/', ctrl.list);
 router.get('/summary', ctrl.summary);
+router.get('/types', ctrl.types);
 router.post('/', authorize('admin', 'tecnico'), ctrl.create);
 router.put('/:id', authorize('admin', 'tecnico'), ctrl.update);
 router.delete('/:id', authorize('admin'), ctrl.remove);

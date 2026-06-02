@@ -1,38 +1,68 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { User, Phone, AlertCircle, MonitorSmartphone } from 'lucide-react';
+import { User, Phone, AlertCircle, MonitorSmartphone, Archive } from 'lucide-react';
 import Modal from '../components/Modal';
 import SchoolCombobox from '../components/SchoolCombobox';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import StaffPicker from '../components/StaffPicker';
 import { SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL } from '../utils/format';
 
 const SERVICE_TYPES = Object.keys(SERVICE_TYPE_LABEL);
 
 // Tipos de equipamento simples — usuário só escolhe a categoria
-const EQUIPMENT_TYPES = ['computador', 'notebook', 'impressora', 'tablet', 'outro'];
+const EQUIPMENT_TYPES = ['computador', 'notebook', 'impressora', 'tablet', 'rede', 'outro'];
 
 export default function OrderFormModal({ open, onClose, order, onSaved }) {
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
   const empty = {
     requesterName: '',
     requesterPhone: '',
     school: '',
-    equipmentType: 'computador',
+    equipmentTypes: ['computador'], // multi-seleção (array)
     serviceType: 'manutencao_corretiva',
     problemReported: '',
+    priority: 'media',
+    number: '',
+    openedAt: '',
+    closedAt: '',
+    technician: '',
+    helpers: [],
   };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [staff, setStaff] = useState([]);
 
   useEffect(() => {
     if (!open) return;
+    // Carrega técnicos e admins (só usado pra exibir o seletor pra admin)
+    if (isAdmin) {
+      Promise.all([
+        api.get('/users', { params: { role: 'tecnico', limit: 100 } }),
+        api.get('/users', { params: { role: 'admin', limit: 100 } }),
+      ]).then(([t, a]) => {
+        const list = [...(t.data.items || []), ...(a.data.items || [])];
+        const map = new Map(list.map(u => [u._id, u]));
+        setStaff([...map.values()].sort((x, y) => x.name.localeCompare(y.name)));
+      }).catch(() => {});
+    }
     if (order) {
       setForm({
         requesterName: order.requesterName || '',
         requesterPhone: order.requesterPhone || '',
         school: order.school?._id || '',
-        equipmentType: order.equipmentType || 'computador',
+        equipmentTypes: order.equipmentType
+          ? order.equipmentType.split(',').map(t => t.trim()).filter(Boolean)
+          : ['computador'],
         serviceType: order.serviceType || 'manutencao_corretiva',
         problemReported: order.problemReported || '',
+        priority: order.priority || 'media',
+        number: order.number || '',
+        openedAt: order.openedAt ? String(order.openedAt).slice(0, 10) : '',
+        closedAt: order.closedAt ? String(order.closedAt).slice(0, 10) : '',
+        technician: order.technician?._id || '',
+        helpers: (order.helpers || []).map(h => h._id || h),
       });
     } else {
       setForm(empty);
@@ -50,6 +80,14 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
     setSaving(true);
     try {
       const payload = { ...form };
+      // converte array -> string CSV pra manter compatibilidade com o backend
+      payload.equipmentType = (form.equipmentTypes || []).join(', ');
+      delete payload.equipmentTypes;
+      if (!payload.equipmentType) {
+        toast.error('Selecione ao menos um equipamento');
+        setSaving(false);
+        return;
+      }
       Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
       if (order) await api.put(`/orders/${order._id}`, payload);
       else       await api.post('/orders', payload);
@@ -112,17 +150,39 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
         {/* EQUIPAMENTO + TIPO DE SERVIÇO */}
         <Section title="Equipamento e serviço" icon={MonitorSmartphone}>
           <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <label className="label">Equipamento *</label>
-              <select
-                className="input"
-                value={form.equipmentType}
-                onChange={e => set('equipmentType', e.target.value)}
-              >
-                {EQUIPMENT_TYPES.map(t => (
-                  <option key={t} value={t}>{EQUIPMENT_TYPE_LABEL[t]}</option>
-                ))}
-              </select>
+            <div className="md:col-span-2">
+              <label className="label">
+                Equipamento(s) * <span className="text-[10px] text-slate-500 font-normal">(selecione um ou mais)</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {EQUIPMENT_TYPES.map(t => {
+                  const checked = form.equipmentTypes?.includes(t);
+                  return (
+                    <button
+                      type="button"
+                      key={t}
+                      onClick={() => {
+                        const list = form.equipmentTypes || [];
+                        if (checked) set('equipmentTypes', list.filter(x => x !== t));
+                        else set('equipmentTypes', [...list, t]);
+                      }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition ${
+                        checked
+                          ? 'border-pref-azul-500 bg-pref-azul-50 dark:bg-pref-azul-900/30 text-pref-azul-700 dark:text-pref-azul-200 font-medium'
+                          : 'border-slate-300 dark:border-slate-700 hover:border-pref-azul-300 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!checked}
+                        readOnly
+                        className="pointer-events-none accent-pref-azul-600"
+                      />
+                      {EQUIPMENT_TYPE_LABEL[t]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div>
               <label className="label">Tipo de serviço *</label>
@@ -134,6 +194,19 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
                 {SERVICE_TYPES.map(t => (
                   <option key={t} value={t}>{SERVICE_TYPE_LABEL[t]}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Prioridade *</label>
+              <select
+                className="input"
+                value={form.priority}
+                onChange={e => set('priority', e.target.value)}
+              >
+                <option value="baixa">🟢 Baixa</option>
+                <option value="media">🔵 Média</option>
+                <option value="alta">🟠 Alta</option>
+                <option value="urgente">🔴 Urgente</option>
               </select>
             </div>
           </div>
@@ -151,6 +224,80 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
             onChange={e => set('problemReported', e.target.value)}
           />
         </Section>
+
+        {/* === Campos avançados de admin (edição de número e datas) === */}
+        {isAdmin && (
+          <section className="border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-lg p-4 bg-amber-50/40 dark:bg-amber-900/10">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+              <Archive size={16} className="text-amber-600"/>
+              Migração / Ajustes administrativos
+            </h3>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+              Estes campos só são editáveis por administradores. Use para reaproveitar
+              numeração ou ajustar datas de O.S. importadas de outro sistema.
+            </p>
+            <div className="grid md:grid-cols-3 gap-3">
+              <div>
+                <label className="label">Número da O.S.</label>
+                <input
+                  className="input font-mono"
+                  placeholder="Ex.: 37/2024"
+                  value={form.number}
+                  onChange={(e) => set('number', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Data de abertura</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={form.openedAt}
+                  onChange={(e) => set('openedAt', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Data de conclusão</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={form.closedAt}
+                  onChange={(e) => set('closedAt', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="label">Técnico responsável</label>
+              <select
+                className="input"
+                value={form.technician}
+                onChange={(e) => set('technician', e.target.value)}
+              >
+                <option value="">— nenhum —</option>
+                {staff.map(u => (
+                  <option key={u._id} value={u._id}>
+                    {u.name} ({u.role === 'admin' ? 'Admin' : 'Técnico'})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Útil pra atribuir o técnico em O.S. importadas
+              </p>
+            </div>
+            <div className="mt-3">
+              <label className="label">Técnico(s) auxiliar(es)</label>
+              <StaffPicker
+                value={form.helpers}
+                options={staff}
+                excludeId={form.technician}
+                onChange={(ids) => set('helpers', ids)}
+                placeholder="Selecione um ou mais auxiliares..."
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Quando mais de uma pessoa participou do atendimento
+              </p>
+            </div>
+          </section>
+        )}
 
         {!order && (
           <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">

@@ -37,8 +37,26 @@ export const EQUIPMENT_TYPE_LABEL = {
   roteador: 'Roteador',
   nobreak: 'Nobreak',
   tablet: 'Tablet',
+  mouse: 'Mouse',
+  teclado: 'Teclado',
+  estabilizador: 'Estabilizador',
+  caixa_cabo_rj45: 'Caixa de cabo RJ45',
+  monitor: 'Monitor',
+  memoria_ram: 'Memória RAM',
+  fonte: 'Fonte',
   outro: 'Outro',
 };
+
+/**
+ * Pega o label "bonito" pra um tipo. Se o tipo for customizado (não mapeado),
+ * capitaliza a primeira letra e troca _ por espaço.
+ */
+export function typeLabel(t) {
+  if (!t) return '-';
+  if (EQUIPMENT_TYPE_LABEL[t]) return EQUIPMENT_TYPE_LABEL[t];
+  const s = String(t).replace(/_/g, ' ').trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export const EQUIPMENT_STATUS_LABEL = {
   em_estoque: 'Em estoque',

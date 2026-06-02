@@ -66,7 +66,7 @@ async function buildLabelsPdf(equipments, baseUrl = '') {
       .fillColor('#0f172a')
       .font('Helvetica-Bold')
       .fontSize(9)
-      .text('SEMED Abaetetuba', textX, y + 10, { width: textW });
+      .text('semec Abaetetuba', textX, y + 10, { width: textW });
 
     doc
       .font('Helvetica-Bold')

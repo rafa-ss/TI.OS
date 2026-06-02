@@ -96,7 +96,7 @@ function buildOrdersPdf(filters) {
       doc
         .fontSize(9)
         .fillColor('#555')
-        .text(`SEMED Abaetetuba - T.I. | Gerado em ${new Date().toLocaleString('pt-BR')}`, {
+        .text(`semec Abaetetuba - T.I. | Gerado em ${new Date().toLocaleString('pt-BR')}`, {
           align: 'center',
         });
       doc.moveDown();

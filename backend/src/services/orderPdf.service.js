@@ -81,6 +81,16 @@ function buildOrderPdf(order) {
       sectionTitle(doc, 'Serviço Realizado');
       paragraph(doc, order.serviceDone || order.diagnosis || '—');
 
+      // ===== Equipe técnica (só se houver auxiliares) =====
+      if (order.helpers && order.helpers.length > 0) {
+        doc.moveDown(0.8);
+        sectionTitle(doc, 'Equipe Técnica');
+        const tecPrincipal = order.technician?.name || '—';
+        const aux = order.helpers.map(h => h.name).filter(Boolean).join(', ');
+        labelValue(doc, 'Responsável', tecPrincipal);
+        labelValue(doc, 'Auxiliar(es)', aux || '—');
+      }
+
       // ===== Assinaturas =====
       // Garante que ficarão no fim da área útil
       const minY = doc.page.height - 200;

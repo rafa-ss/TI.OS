@@ -51,7 +51,7 @@ export default function RecentMessagesCard() {
   const hasAnything = !!general || sorted.length > 0;
 
   return (
-    <div className="card overflow-hidden flex flex-col">
+    <div className="card overflow-hidden flex flex-col h-full">
       <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-pref-azul-100 dark:bg-pref-azul-900/30 flex items-center justify-center">
@@ -72,7 +72,7 @@ export default function RecentMessagesCard() {
         </button>
       </div>
 
-      <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[26rem] overflow-y-auto">
+      <ul className="divide-y divide-slate-100 dark:divide-slate-800 flex-1 overflow-y-auto">
         {loading && (
           <li className="px-5 py-4 text-sm text-slate-500 text-center">Carregando...</li>
         )}
