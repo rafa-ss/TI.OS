@@ -32,13 +32,36 @@ function paintHeaderFooter(doc) {
 }
 
 /**
- * Pega só o número limpo da O.S. (ex.: "OS-2025-00037" → "37").
+ * Devolve o número da O.S. no formato amigável para o PDF.
+ *
+ * Tratamentos:
+ *   - "13/2026"          → "13/2026"        (já está no formato novo)
+ *   - "OS-2025-00037"    → "37/2025"        (formato antigo do sistema)
+ *   - "OS-2026-00001"    → "1/2026"
+ *   - "37"               → "37"             (só o número solto)
+ *   - "qualquer-coisa"   → devolve como veio
  */
 function shortNumber(fullNumber = '') {
-  const m = String(fullNumber).match(/(\d+)$/);
-  if (!m) return fullNumber;
-  // remove zeros à esquerda
-  return String(parseInt(m[1], 10));
+  const raw = String(fullNumber || '').trim();
+  if (!raw) return '—';
+
+  // Formato novo: já tem "/" → devolve direto
+  if (raw.includes('/')) return raw;
+
+  // Formato antigo: OS-YYYY-NNNNN
+  const ano = raw.match(/OS-(\d{4})-(\d+)/i);
+  if (ano) {
+    const numero = String(parseInt(ano[2], 10));
+    return `${numero}/${ano[1]}`;
+  }
+
+  // Só um número solto
+  const soNum = raw.match(/^\d+$/);
+  if (soNum) return String(parseInt(raw, 10));
+
+  // Fallback: tenta extrair o último número
+  const m = raw.match(/(\d+)$/);
+  return m ? String(parseInt(m[1], 10)) : raw;
 }
 
 function buildOrderPdf(order) {
@@ -102,9 +125,9 @@ function buildOrderPdf(order) {
       const rightX = doc.page.width - 70 - colW;
 
       // Nomes acima da linha (estilo do modelo: SEMEC / nome do técnico)
-      doc.font('Helvetica').fontSize(11).fillColor('#000');
-      doc.text('SEMEC', leftX, sigLineY - 16, { width: colW, align: 'center' });
-      doc.text(order.technician?.name || '—', rightX, sigLineY - 16, { width: colW, align: 'center' });
+     // doc.font('Helvetica').fontSize(11).fillColor('#000');
+     // doc.text('SEMEC', leftX, sigLineY - 16, { width: colW, align: 'center' });
+//doc.text(order.technician?.name || '—', rightX, sigLineY - 16, { width: colW, align: 'center' });
 
       // Linhas
       doc.moveTo(leftX, sigLineY).lineTo(leftX + colW, sigLineY).strokeColor('#000').lineWidth(0.6).stroke();
