@@ -8,7 +8,7 @@ import { TableSkeleton } from '../components/Loading';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { formatDate } from '../utils/format';
+import { formatDate, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR } from '../utils/format';
 import OrderFormModal from './OrderFormModal';
 import MigrateOrderModal from './MigrateOrderModal';
 
@@ -271,6 +271,7 @@ export default function Orders() {
                   <th>Solicitante</th>
                   <th>Escola</th>
                   <th>Equipamento</th>
+                  <th>Local</th>
                   <th>Técnico</th>
                   <th>Prioridade</th>
                   <th>Status</th>
@@ -294,6 +295,13 @@ export default function Orders() {
                     <td>
                       <div className="text-sm">{o.equipmentType || '-'}</div>
                       <div className="text-xs text-slate-500">{o.patrimonio || '—'}</div>
+                    </td>
+                    <td>
+                      {o.serviceLocation && (
+                        <span className={`badge ${SERVICE_LOCATION_COLOR[o.serviceLocation] || ''}`}>
+                          {o.serviceLocation === 'ctec' ? '🏢' : '🚗'} {SERVICE_LOCATION_LABEL[o.serviceLocation]}
+                        </span>
+                      )}
                     </td>
                     <td>{o.technician?.name || <span className="text-slate-400 italic text-xs">não atribuído</span>}</td>
                     <td><PriorityBadge priority={o.priority} /></td>

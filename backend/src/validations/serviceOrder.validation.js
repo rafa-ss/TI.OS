@@ -19,6 +19,7 @@ const createSchema = z.object({
   brandModel: z.string().optional().default(''),
   serialNumber: z.string().optional().default(''),
   serviceType: z.enum(SERVICE_TYPES).optional().default('outro'),
+  serviceLocation: z.enum(['ctec', 'externa']).optional(),
   problemReported: z.string().min(3),
   diagnosis: z.string().optional().default(''),
   serviceDone: z.string().optional().default(''),

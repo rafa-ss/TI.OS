@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../services/api';
 import { PageLoader } from '../components/Loading';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { formatDate, ROLE_LABEL, SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL } from '../utils/format';
+import { formatDate, ROLE_LABEL, SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR } from '../utils/format';
 import OrderFormModal from './OrderFormModal';
 import Modal from '../components/Modal';
 import { useAuth } from '../context/AuthContext';
@@ -274,6 +274,15 @@ export default function OrderDetail() {
               }
             />
             <Info label="Tipo de serviço" value={SERVICE_TYPE_LABEL[order.serviceType] || order.serviceType || '-'} />
+            <Info
+              label="Local do atendimento"
+              value={
+                <span className={`badge ${SERVICE_LOCATION_COLOR[order.serviceLocation] || ''}`}>
+                  {order.serviceLocation === 'ctec' ? '🏢 ' : '🚗 '}
+                  {SERVICE_LOCATION_LABEL[order.serviceLocation] || 'não definido'}
+                </span>
+              }
+            />
             <Info label="Técnico responsável" value={order.technician?.name || <span className="text-slate-400 italic">aguardando início</span>} />
             <Info
               label="Técnico(s) auxiliar(es)"

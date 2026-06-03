@@ -89,8 +89,14 @@ function buildOrderPdf(order) {
 
       // ===== Seção 1: Informações da Solicitação =====
       sectionTitle(doc, 'Informações da Solicitação');
-      labelValue(doc, 'Local', (order.school?.name || '—').toUpperCase());
+      labelValue(doc, 'Escola', (order.school?.name || '—').toUpperCase());
       labelValue(doc, 'Requerente', order.requesterName || '—');
+      const localLabel = order.serviceLocation === 'ctec'
+        ? 'Realizado na SEMEC (equipamento trazido até a Coordenação)'
+        : order.serviceLocation === 'externa'
+          ? 'Visita externa (atendimento na escola/prédio)'
+          : '—';
+      labelValue(doc, 'Local do atendimento', localLabel);
 
       doc.moveDown(0.8);
 
@@ -125,9 +131,9 @@ function buildOrderPdf(order) {
       const rightX = doc.page.width - 70 - colW;
 
       // Nomes acima da linha (estilo do modelo: SEMEC / nome do técnico)
-     // doc.font('Helvetica').fontSize(11).fillColor('#000');
-     // doc.text('SEMEC', leftX, sigLineY - 16, { width: colW, align: 'center' });
-//doc.text(order.technician?.name || '—', rightX, sigLineY - 16, { width: colW, align: 'center' });
+      //doc.font('Helvetica').fontSize(11).fillColor('#000');
+      //doc.text('SEMEC', leftX, sigLineY - 16, { width: colW, align: 'center' });
+     // doc.text(order.technician?.name || '—', rightX, sigLineY - 16, { width: colW, align: 'center' });
 
       // Linhas
       doc.moveTo(leftX, sigLineY).lineTo(leftX + colW, sigLineY).strokeColor('#000').lineWidth(0.6).stroke();

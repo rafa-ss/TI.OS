@@ -246,7 +246,7 @@ exports.update = asyncHandler(async (req, res) => {
 
   const trackedFields = [
     'status', 'priority', 'technician', 'diagnosis',
-    'serviceDone', 'dueDate', 'problemReported', 'equipmentType', 'serviceType',
+    'serviceDone', 'dueDate', 'problemReported', 'equipmentType', 'serviceType', 'serviceLocation',
     'number', 'openedAt', 'closedAt', 'helpers',
   ];
   const changes = [];

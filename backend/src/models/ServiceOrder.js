@@ -84,6 +84,7 @@ const serviceOrderSchema = new mongoose.Schema(
 
     // Tipo de serviço a ser realizado
     serviceType: { type: String, default: 'outro', index: true },
+    serviceLocation: { type: String, enum: ['ctec', 'externa'], default: 'externa', index: true }, // onde o atendimento será feito
 
     // Atendimento
     problemReported: { type: String, required: true },
@@ -121,9 +122,23 @@ serviceOrderSchema.set('toObject', { virtuals: true });
 serviceOrderSchema.pre('save', async function (next) {
   if (this.isNew && !this.number) {
     const year = new Date().getFullYear();
-    const seq = await Counter.next(`os_${year}`);
-    // Formato: NN/YYYY (ex.: 15/2026)
-    this.number = `${String(seq).padStart(2, '0')}/${year}`;
+    const ServiceOrder = this.constructor;
+
+    // Estratégia anti-duplicidade: gera um número e verifica se já existe.
+    // Se existir (ex.: importação manual deixou números "à frente"), avança
+    // o contador automaticamente até achar um livre. Até 50 tentativas.
+    let attempts = 0;
+    while (attempts < 50) {
+      const seq = await Counter.next(`os_${year}`);
+      const candidate = `${String(seq).padStart(2, '0')}/${year}`;
+      const exists = await ServiceOrder.findOne({ number: candidate }).select('_id').lean();
+      if (!exists) {
+        this.number = candidate;
+        return next();
+      }
+      attempts++;
+    }
+    return next(new Error('Não foi possível gerar um número único após 50 tentativas'));
   }
   next();
 });

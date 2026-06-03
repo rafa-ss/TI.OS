@@ -77,7 +77,7 @@ export const EQUIPMENT_STATUS_COLOR = {
 };
 
 export const SERVICE_TYPE_LABEL = {
-  instalacao_programas: 'Instalação de programas',
+  instalacao_software: 'Instalação de Software',
   manutencao_preventiva: 'Manutenção preventiva',
   manutencao_corretiva: 'Manutenção corretiva',
   formatacao: 'Formatação',
@@ -87,6 +87,17 @@ export const SERVICE_TYPE_LABEL = {
   suporte_remoto: 'Suporte remoto',
   visita_tecnica: 'Visita técnica',
   outro: 'Outro',
+};
+
+
+export const SERVICE_LOCATION_LABEL = {
+  ctec: 'SEMEC-CTEC',
+  externa: 'Visita externa',
+};
+
+export const SERVICE_LOCATION_COLOR = {
+  ctec: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  externa: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 };
 
 export const ROLE_LABEL = {

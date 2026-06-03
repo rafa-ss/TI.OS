@@ -11,7 +11,7 @@ import { SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL } from '../utils/format';
 const SERVICE_TYPES = Object.keys(SERVICE_TYPE_LABEL);
 
 // Tipos de equipamento simples — usuário só escolhe a categoria
-const EQUIPMENT_TYPES = ['computador', 'notebook', 'impressora', 'tablet', 'rede', 'outro'];
+const EQUIPMENT_TYPES = ['computador', 'notebook', 'impressora',, 'outro'];
 
 export default function OrderFormModal({ open, onClose, order, onSaved }) {
   const { hasRole } = useAuth();
@@ -24,6 +24,7 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
     serviceType: 'manutencao_corretiva',
     problemReported: '',
     priority: 'media',
+    serviceLocation: 'externa',
     number: '',
     openedAt: '',
     closedAt: '',
@@ -58,6 +59,7 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
         serviceType: order.serviceType || 'manutencao_corretiva',
         problemReported: order.problemReported || '',
         priority: order.priority || 'media',
+        serviceLocation: order.serviceLocation || 'externa',
         number: order.number || '',
         openedAt: order.openedAt ? String(order.openedAt).slice(0, 10) : '',
         closedAt: order.closedAt ? String(order.closedAt).slice(0, 10) : '',
@@ -209,6 +211,47 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
                 <option value="urgente">🔴 Urgente</option>
               </select>
             </div>
+          </div>
+        </Section>
+
+        {/* LOCAL DO ATENDIMENTO */}
+        <Section title="Local do atendimento" icon={MonitorSmartphone}>
+          <p className="text-xs text-slate-500 mb-3">
+            Onde o serviço será realizado?
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => set('serviceLocation', 'ctec')}
+              className={`p-4 rounded-xl border-2 text-left transition ${
+                form.serviceLocation === 'ctec'
+                  ? 'border-pref-azul-500 bg-pref-azul-50 dark:bg-pref-azul-900/20 ring-2 ring-pref-azul-500/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-pref-azul-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+                🏢 Prédio SEMEC
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                O equipamento será trazido para a Coordenação de Tecnologia Educacional.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => set('serviceLocation', 'externa')}
+              className={`p-4 rounded-xl border-2 text-left transition ${
+                form.serviceLocation === 'externa'
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-500/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-amber-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+                🚗 Visita externa
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                O técnico irá até a escola/prédio para realizar o atendimento.
+              </p>
+            </button>
           </div>
         </Section>
 
