@@ -99,15 +99,14 @@ export default function Equipment() {
 
       {/* Cards de resumo */}
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <StatCard label="Total em estoque" value={summary.total} color="brand" icon={Package}
             onClick={() => setFilters({ q: '', type: '', condition: '' })}/>
           <StatCard label="Novos" value={countByCondition('novo')} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, condition: 'novo' }))}/>
           <StatCard label="Usados" value={countByCondition('usado')} color="amber" icon={Wrench}
             onClick={() => setFilters(f => ({ ...f, condition: 'usado' }))}/>
-          <StatCard label="Recondicionados" value={countByCondition('recondicionado')} color="blue" icon={Wrench}
-            onClick={() => setFilters(f => ({ ...f, condition: 'recondicionado' }))}/>
+        
         </div>
       )}
 
@@ -115,7 +114,7 @@ export default function Equipment() {
       {summary?.byType?.length > 0 && (
         <div className="card p-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Quantidade por tipo</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             {allTypes.map(t => {
               const Icon = TYPE_ICONS[t] || HelpCircle;
               const qty = summary.byType.find(x => x._id === t)?.total || 0;
@@ -260,9 +259,19 @@ function StockForm({ open, onClose, item, onSaved }) {
     setSaving(true);
     try {
       const payload = { ...form, quantity: Number(form.quantity) };
-      if (item) await api.put(`/stock/${item._id}`, payload);
-      else      await api.post('/stock', payload);
-      toast.success(item ? 'Lote atualizado' : `${payload.quantity} unidade(s) adicionada(s) ao estoque`);
+      let res;
+      if (item) {
+        res = await api.put(`/stock/${item._id}`, payload);
+        toast.success('Lote atualizado');
+      } else {
+        res = await api.post('/stock', payload);
+        // Backend retorna { merged: true } se somou em lote existente
+        if (res.data?.merged) {
+          toast.success(res.data.message || `Quantidade somada ao lote existente`);
+        } else {
+          toast.success(`${payload.quantity} unidade(s) adicionada(s) ao estoque`);
+        }
+      }
       onSaved?.();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Erro');
@@ -330,7 +339,7 @@ function StockForm({ open, onClose, item, onSaved }) {
 
         <div>
           <label className="label">Local de armazenamento</label>
-          <input className="input" placeholder="Ex.: Almoxarifado SEMED" value={form.location}
+          <input className="input" placeholder="Ex.: Coordenação de tecnologia educacional" value={form.location}
             onChange={e => set('location', e.target.value)}/>
         </div>
 

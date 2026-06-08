@@ -31,7 +31,7 @@ export const PRIORITY_COLOR = {
 };
 
 export const EQUIPMENT_TYPE_LABEL = {
-  computador: 'Computador',
+  computador: 'Computador (Placa-mãe DDR3, 8Gb, SSD240GB)',
   notebook: 'Notebook',
   impressora: 'Impressora',
   roteador: 'Roteador',
@@ -40,7 +40,6 @@ export const EQUIPMENT_TYPE_LABEL = {
   mouse: 'Mouse',
   teclado: 'Teclado',
   estabilizador: 'Estabilizador',
-  caixa_cabo_rj45: 'Caixa de cabo RJ45',
   monitor: 'Monitor',
   memoria_ram: 'Memória RAM',
   fonte: 'Fonte',

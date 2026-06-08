@@ -20,8 +20,43 @@ exports.list = asyncHandler(async (req, res) => {
 
 exports.create = asyncHandler(async (req, res) => {
   const payload = { ...req.body, createdBy: req.user._id };
-  const item = await StockItem.create(payload);
-  res.status(201).json({ success: true, item });
+
+    const normalizeType = (value) =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '_');
+
+  // Normaliza o tipo (minúsculo, sem espaços extras) para casar com lote existente
+  const type = normalizeType(payload.type);
+  const condition = payload.condition || 'novo';
+  const location = (payload.location || 'Coordenação de tecnologia educacional').trim();
+  const addQty = Math.max(1, Number(payload.quantity) || 1);
+
+  // === MERGE: se já existir lote com mesmo tipo + condição + local, soma ===
+  const existing = await StockItem.findOne({ type, condition, location });
+
+  if (existing) {
+    existing.quantity = (existing.quantity || 0) + addQty;
+    // Se vier notes nova, concatena (não sobrescreve a antiga)
+    if (payload.notes && payload.notes.trim() &&
+        !(existing.notes || '').includes(payload.notes.trim())) {
+      existing.notes = [existing.notes, payload.notes].filter(Boolean).join(' | ');
+    }
+    await existing.save();
+    return res.status(200).json({
+      success: true,
+      item: existing,
+      merged: true,
+      message: `+${addQty} unidade(s) adicionada(s) ao lote existente (total: ${existing.quantity})`,
+    });
+  }
+
+  // Senão, cria um lote novo
+  const item = await StockItem.create({ ...payload, type, condition, location, quantity: addQty });
+  res.status(201).json({ success: true, item, merged: false });
 });
 
 exports.update = asyncHandler(async (req, res) => {
