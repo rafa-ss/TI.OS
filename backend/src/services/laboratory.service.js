@@ -9,7 +9,7 @@ async function checkAvailability(equipments) {
   const missing = [];
   for (const eq of equipments) {
     const stockTotal = await StockItem.aggregate([
-      { $match: { type: eq.type, condition: eq.condition } },
+      { $match: { type: String(eq.type).toLowerCase().trim(), condition: eq.condition } },
       { $group: { _id: null, total: { $sum: '$quantity' } } },
     ]);
     const available = stockTotal[0]?.total || 0;
@@ -41,7 +41,8 @@ async function debitStock(equipments) {
 
   for (const eq of equipments) {
     let needed = eq.quantity;
-    const lots = await StockItem.find({ type: eq.type, condition: eq.condition })
+    const type = String(eq.type).toLowerCase().trim();
+    const lots = await StockItem.find({ type, condition: eq.condition })
       .sort({ createdAt: 1 }); // FIFO
     for (const lot of lots) {
       if (needed <= 0) break;
@@ -56,20 +57,21 @@ async function debitStock(equipments) {
 
 /**
  * Devolve quantidades ao estoque (cria/incrementa lotes).
- * Usado quando um laboratório é desativado ou cancelado.
+ * Usado quando um laboratório é desativado/cancelado ou quando admin remove equipamentos da edição.
  */
-async function returnToStock(equipments, location = 'Almoxarifado semec', notes = '') {
+async function returnToStock(equipments, location = 'Almoxarifado SEMED', notes = '') {
   for (const eq of equipments) {
+    const type = String(eq.type).toLowerCase().trim();
     // Tenta achar lote existente do mesmo tipo/condição/local
     const existing = await StockItem.findOne({
-      type: eq.type, condition: eq.condition, location,
+      type, condition: eq.condition, location,
     });
     if (existing) {
       existing.quantity += eq.quantity;
       await existing.save();
     } else {
       await StockItem.create({
-        type: eq.type,
+        type,
         condition: eq.condition,
         quantity: eq.quantity,
         location,
@@ -79,4 +81,39 @@ async function returnToStock(equipments, location = 'Almoxarifado semec', notes 
   }
 }
 
-module.exports = { checkAvailability, debitStock, returnToStock };
+/**
+ * Calcula o delta entre dois arrays de equipamentos (antigo vs novo).
+ * Retorna { toDebit: [], toReturn: [] }:
+ *  - toDebit: itens novos ou aumentaram quantidade → precisa tirar do estoque
+ *  - toReturn: itens removidos ou diminuíram quantidade → devolve ao estoque
+ *
+ * Chave do par: `${type}|${condition}`.
+ */
+function diffEquipments(oldEqs = [], newEqs = []) {
+  const key = (e) => `${String(e.type).toLowerCase().trim()}|${e.condition}`;
+  const oldMap = new Map();
+  for (const e of oldEqs) {
+    const k = key(e);
+    oldMap.set(k, (oldMap.get(k) || 0) + Number(e.quantity || 0));
+  }
+  const newMap = new Map();
+  for (const e of newEqs) {
+    const k = key(e);
+    newMap.set(k, (newMap.get(k) || 0) + Number(e.quantity || 0));
+  }
+
+  const allKeys = new Set([...oldMap.keys(), ...newMap.keys()]);
+  const toDebit = [];
+  const toReturn = [];
+  for (const k of allKeys) {
+    const [type, condition] = k.split('|');
+    const oldQ = oldMap.get(k) || 0;
+    const newQ = newMap.get(k) || 0;
+    const diff = newQ - oldQ;
+    if (diff > 0) toDebit.push({ type, condition, quantity: diff });
+    else if (diff < 0) toReturn.push({ type, condition, quantity: -diff });
+  }
+  return { toDebit, toReturn };
+}
+
+module.exports = { checkAvailability, debitStock, returnToStock, diffEquipments };

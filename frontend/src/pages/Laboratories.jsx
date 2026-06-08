@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Plus, Search, Pencil, Trash2, FlaskConical, Package,MonitorSmartphone,
+  Plus, Search, Pencil, Trash2, FlaskConical, Package,
   CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer, FileText, FileType,
-  Wifi, Battery, Tablet, HelpCircle, AlertTriangle
+  Wifi, Battery, Tablet, HelpCircle, AlertTriangle, Mouse, Keyboard, Cpu, Cable, Zap, MemoryStick, Hash
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -11,7 +11,7 @@ import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
 import SchoolCombobox from '../components/SchoolCombobox';
-import { EQUIPMENT_TYPE_LABEL, formatDate } from '../utils/format';
+import { typeLabel, formatDate } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABEL = {
@@ -30,13 +30,22 @@ const STATUS_COLOR = {
   desativado: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
 };
 
-const TYPES = ['computador','notebook','impressora','roteador','nobreak','tablet','outro'];
+// Tipos sugeridos por padrão (caso a API /stock/types ainda não tenha respondido)
+const SUGGESTED_TYPES = [
+  'computador','notebook','impressora','roteador','nobreak','tablet',
+  'mouse','teclado','estabilizador','caixa_cabo_rj45','monitor','memoria_ram','fonte','outro'
+];
 const CONDITIONS = [
   { v: 'novo', l: 'Novo' },
   { v: 'usado', l: 'Usado' },
   { v: 'recondicionado', l: 'Recondicionado' },
 ];
-const TYPE_ICONS = { computador:Monitor, notebook:Laptop, impressora:Printer, roteador:Wifi, nobreak:Battery, tablet:Tablet, outro:HelpCircle };
+const TYPE_ICONS = {
+  computador: Monitor, notebook: Laptop, impressora: Printer, roteador: Wifi,
+  nobreak: Battery, tablet: Tablet, mouse: Mouse, teclado: Keyboard,
+  estabilizador: Zap, caixa_cabo_rj45: Cable, monitor: Monitor,
+  memoria_ram: MemoryStick, fonte: Cpu, outro: HelpCircle,
+};
 
 export default function Laboratories() {
   const { hasRole } = useAuth();
@@ -125,7 +134,7 @@ export default function Laboratories() {
       {/* Cards de resumo */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total" value={summary.total} color="brand" icon={MonitorSmartphone}
+          <StatCard label="Total" value={summary.total} color="brand" icon={FlaskConical}
             onClick={() => setFilters({ q: '', status: '', page: 1, limit: 10 })}/>
           <StatCard label="Concluídos" value={summary.concluidos} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, status: 'concluido', page: 1 }))}/>
@@ -187,7 +196,7 @@ export default function Laboratories() {
                             return (
                               <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-xs">
                                 <Icon size={12}/>
-                                <b>{eq.quantity}×</b> {EQUIPMENT_TYPE_LABEL[eq.type]}
+                                <b>{eq.quantity}×</b> {typeLabel(eq.type)}
                               </span>
                             );
                           })}
@@ -198,15 +207,19 @@ export default function Laboratories() {
                       <td className="text-sm">
                         {(lab.responsibles && lab.responsibles.length > 0) ? (
                           <div className="flex flex-wrap gap-1">
-                            {lab.responsibles.map(r => (
-                              <span key={r._id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs ${
-                                r.role === 'admin'
-                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                              }`}>
-                                {r.role === 'admin' ? '👤' : '🔧'} {r.name}
-                              </span>
-                            ))}
+                            {lab.responsibles.map(r => {
+                              const cls = r.role === 'admin'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                                : r.role === 'atendente'
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+                              const icon = r.role === 'admin' ? '👤' : r.role === 'atendente' ? '☎️' : '🔧';
+                              return (
+                                <span key={r._id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs ${cls}`}>
+                                  {icon} {r.name}
+                                </span>
+                              );
+                            })}
                           </div>
                         ) : lab.responsibleTech?.name ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -248,7 +261,7 @@ export default function Laboratories() {
           onChange={p => setFilters(f => ({ ...f, page: p }))}/>
       </div>
 
-      <LabForm open={open} onClose={() => setOpen(false)} lab={editing}
+      <LabForm open={open} onClose={() => setOpen(false)} lab={editing} isAdmin={isAdmin}
         onSaved={() => { setOpen(false); load(); }}/>
       <DeactivateModal lab={deactivating} onClose={() => setDeactivating(null)}
         onDone={() => { setDeactivating(null); load(); }}/>
@@ -284,29 +297,40 @@ function StatCard({ label, value, color, icon: Icon, onClick }) {
 // =============================================================
 // Formulário de Cadastro / Edição
 // =============================================================
-function LabForm({ open, onClose, lab, onSaved }) {
+function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
   const empty = {
     name: '', school: '', status: 'planejado',
     responsibles: [], assemblyDate: '', notes: '',
+    deliveryTermNumber: '',
     equipments: [],
   };
   const [form, setForm] = useState(empty);
-  const [staff, setStaff] = useState([]);  // técnicos + admins
+  const [staff, setStaff] = useState([]);  // técnicos + admins + atendentes
   const [stockSummary, setStockSummary] = useState(null);
+  const [stockTypes, setStockTypes] = useState(SUGGESTED_TYPES);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    // Carrega técnicos + admins (responsáveis pela montagem do lab)
+    // Carrega técnicos + admins + atendentes (todos podem ser responsáveis pela montagem)
     Promise.all([
-      api.get('/users', { params: { role: 'tecnico', limit: 100 } }),
-      api.get('/users', { params: { role: 'admin', limit: 100 } }),
-    ]).then(([t, a]) => {
-      const list = [...t.data.items, ...a.data.items];
-      // remove duplicatas por _id (caso algum venha em ambos)
+      api.get('/users', { params: { role: 'tecnico',  limit: 100, active: true } }),
+      api.get('/users', { params: { role: 'admin',    limit: 100, active: true } }),
+      api.get('/users', { params: { role: 'atendente', limit: 100, active: true } }),
+    ]).then(([t, a, at]) => {
+      const list = [...t.data.items, ...a.data.items, ...at.data.items];
+      // remove duplicatas por _id (caso algum venha em mais de uma lista)
       const map = new Map(list.map(u => [u._id, u]));
       setStaff([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
     }).catch(() => {});
+    // Tipos disponíveis no estoque (padrões + customizados que o usuário cadastrou)
+    api.get('/stock/types')
+      .then(r => {
+        const items = (r.data?.items || []).filter(Boolean);
+        // mantém os sugeridos como fallback caso o estoque esteja vazio
+        const merged = Array.from(new Set([...items, ...SUGGESTED_TYPES])).sort();
+        setStockTypes(merged);
+      }).catch(() => setStockTypes(SUGGESTED_TYPES));
     api.get('/stock/summary')
       .then(r => setStockSummary(r.data.data)).catch(() => {});
     setForm(lab
@@ -317,6 +341,7 @@ function LabForm({ open, onClose, lab, onSaved }) {
             ? lab.responsibles.map(r => r._id)
             : (lab.responsibleTech?._id ? [lab.responsibleTech._id] : []),
           assemblyDate: lab.assemblyDate ? String(lab.assemblyDate).slice(0,10) : '',
+          deliveryTermNumber: lab.deliveryTermNumber || '',
           equipments: lab.equipments || [],
         }
       : empty);
@@ -353,11 +378,23 @@ function LabForm({ open, onClose, lab, onSaved }) {
       Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
 
       if (lab) {
-        // Edição não mexe na lista de equipamentos (evita problemas com estoque)
-        delete payload.equipments;
+        // Admin pode incluir/excluir/alterar equipamentos e o Nº do termo; demais perfis: backend ignora
+        if (!isAdmin) {
+          delete payload.equipments;
+          delete payload.deliveryTermNumber;
+        } else {
+          // Não envia o campo se não mudou (evita gravar histórico à toa)
+          const original = (lab.deliveryTermNumber || '').trim();
+          const novo = (payload.deliveryTermNumber || '').trim();
+          if (original === novo) delete payload.deliveryTermNumber;
+        }
         await api.put(`/laboratories/${lab._id}`, payload);
-        toast.success('Laboratório atualizado');
+        toast.success(isAdmin && payload.equipments
+          ? 'Laboratório atualizado (estoque ajustado conforme alterações)'
+          : 'Laboratório atualizado');
       } else {
+        // Criação: deliveryTermNumber sempre é gerado pelo sistema
+        delete payload.deliveryTermNumber;
         await api.post('/laboratories', payload);
         toast.success('Laboratório criado e equipamentos debitados do estoque');
       }
@@ -415,7 +452,7 @@ function LabForm({ open, onClose, lab, onSaved }) {
                 options={staff}
                 onChange={(ids) => set('responsibles', ids)}
               />
-              <p className="text-[11px] text-slate-500 mt-1">Selecione um ou mais membros da equipe (técnicos e/ou administradores)</p>
+              <p className="text-[11px] text-slate-500 mt-1">Selecione um ou mais membros da equipe (técnicos, administradores e/ou atendentes)</p>
             </div>
             <div>
               <label className="label">Data de montagem</label>
@@ -425,12 +462,38 @@ function LabForm({ open, onClose, lab, onSaved }) {
           </div>
         </section>
 
+        {/* === TERMO DE ENTREGA (somente admin, modo edição) === */}
+        {lab && isAdmin && (
+          <section className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <Hash size={16} className="text-amber-600"/> Nº do Termo de Entrega
+              <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-200 dark:bg-amber-800 dark:text-amber-100 px-1.5 py-0.5 rounded">Admin</span>
+            </h3>
+            <div className="grid md:grid-cols-3 gap-3 items-start">
+              <div className="md:col-span-1">
+                <input
+                  className="input font-mono text-center text-base font-bold"
+                  placeholder="01/2026"
+                  value={form.deliveryTermNumber}
+                  onChange={e => set('deliveryTermNumber', e.target.value)}
+                />
+                <p className="text-[10px] text-slate-500 mt-1 text-center">Formato: <b>NN/AAAA</b> (ex.: 01/2026)</p>
+              </div>
+              <div className="md:col-span-2 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <p>📝 Use este campo pra <b>ajustar manualmente</b> o número do termo (útil pra laboratórios antigos com numeração já impressa em papel).</p>
+                <p>✏️ Deixe <b>em branco</b> pra o sistema gerar um novo número automaticamente na próxima emissão do PDF/DOCX.</p>
+                <p>⚠️ O sistema não permite usar um número já em uso por outro laboratório.</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* === EQUIPAMENTOS === */}
-        {!lab && (
+        {(!lab || isAdmin) && (
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Package size={16}/> Equipamentos a serem retirados do estoque
+                <Package size={16}/> {lab ? 'Equipamentos do laboratório' : 'Equipamentos a serem retirados do estoque'}
               </h3>
               <button type="button" onClick={addEquip} className="btn-secondary !py-1 !px-3 text-xs">
                 <Plus size={14}/> Adicionar
@@ -456,7 +519,10 @@ function LabForm({ open, onClose, lab, onSaved }) {
                       <div className="col-span-4">
                         <label className="text-[10px] uppercase font-semibold text-slate-500">Tipo</label>
                         <select className="input !py-1.5" value={eq.type} onChange={e => updateEquip(i, 'type', e.target.value)}>
-                          {TYPES.map(t => <option key={t} value={t}>{EQUIPMENT_TYPE_LABEL[t]}</option>)}
+                          {/* Garante que o tipo atual do item apareça mesmo se não estiver na lista do estoque */}
+                          {(stockTypes.includes(eq.type) ? stockTypes : [eq.type, ...stockTypes]).map(t => (
+                            <option key={t} value={t}>{typeLabel(t)}</option>
+                          ))}
                         </select>
                       </div>
                       <div className="col-span-3">
@@ -495,12 +561,14 @@ function LabForm({ open, onClose, lab, onSaved }) {
             )}
 
             <p className="mt-3 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              💡 Ao criar o laboratório, as quantidades serão <b>retiradas automaticamente</b> do seu estoque (lotes mais antigos primeiro).
+              💡 {lab
+                ? 'Itens novos/aumentados são retirados do estoque automaticamente. Itens removidos/diminuídos voltam para o estoque (Almoxarifado SEMED).'
+                : 'Ao criar o laboratório, as quantidades serão retiradas automaticamente do seu estoque (lotes mais antigos primeiro).'}
             </p>
           </section>
         )}
 
-        {lab && (
+        {lab && !isAdmin && (
           <section>
             <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
               <Package size={16}/> Equipamentos deste laboratório
@@ -511,7 +579,7 @@ function LabForm({ open, onClose, lab, onSaved }) {
                 return (
                   <div key={i} className="flex items-center gap-2 text-sm p-2 rounded bg-slate-50 dark:bg-slate-800/40">
                     <Icon size={14} className="text-brand-600"/>
-                    <b>{eq.quantity}×</b> {EQUIPMENT_TYPE_LABEL[eq.type]} ({eq.condition})
+                    <b>{eq.quantity}×</b> {typeLabel(eq.type)} ({eq.condition})
                   </div>
                 );
               })}
@@ -571,7 +639,7 @@ function DeactivateModal({ lab, onClose, onDone }) {
             ⚠️ Você vai desativar o laboratório <b>"{lab.name}"</b>
           </p>
           <p className="text-amber-700 dark:text-amber-300">
-            <b>{total} equipamento(s)</b> serão devolvidos ao estoque do Almoxarifado semec.
+            <b>{total} equipamento(s)</b> serão devolvidos ao estoque do Almoxarifado SEMED.
           </p>
         </div>
         <div>
@@ -611,6 +679,16 @@ function ResponsiblesPicker({ value = [], options = [], onChange }) {
     !search || o.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // helpers de estilo por role
+  const roleClass = (role) =>
+    role === 'admin'
+      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+      : role === 'atendente'
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+  const roleIcon = (role) => role === 'admin' ? '👤' : role === 'atendente' ? '☎️' : '🔧';
+  const roleLabel = (role) => role === 'admin' ? 'Admin' : role === 'atendente' ? 'Atendente' : 'Técnico';
+
   return (
     <div className="relative" ref={ref}>
       {/* Box de exibição com chips */}
@@ -625,13 +703,9 @@ function ResponsiblesPicker({ value = [], options = [], onChange }) {
           selectedItems.map(item => (
             <span
               key={item._id}
-              className={`inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-xs font-medium ${
-                item.role === 'admin'
-                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-              }`}
+              className={`inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-xs font-medium ${roleClass(item.role)}`}
             >
-              {item.role === 'admin' ? '👤' : '🔧'} {item.name}
+              {roleIcon(item.role)} {item.name}
               <span
                 onClick={(e) => { e.stopPropagation(); toggle(item._id); }}
                 className="ml-1 w-4 h-4 inline-flex items-center justify-center rounded-full hover:bg-white/40"
@@ -678,12 +752,8 @@ function ResponsiblesPicker({ value = [], options = [], onChange }) {
                     onChange={() => {}}
                     className="rounded pointer-events-none"
                   />
-                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
-                    opt.role === 'admin'
-                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                  }`}>
-                    {opt.role === 'admin' ? 'Admin' : 'Técnico'}
+                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${roleClass(opt.role)}`}>
+                    {roleLabel(opt.role)}
                   </span>
                   <span className="font-medium text-slate-800 dark:text-slate-100">{opt.name}</span>
                   <span className="ml-auto text-[10px] text-slate-500">{opt.email}</span>

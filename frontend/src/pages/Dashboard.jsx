@@ -98,7 +98,7 @@ export default function Dashboard() {
       </div>
 
       {/* Cards clicáveis — cada um navega para a tela com filtros já aplicados */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
           icon={ClipboardList} label="Ativas" value={c.totalAtivas} color="sky"
           sub={`${c.abertas} abertas`}
@@ -108,10 +108,7 @@ export default function Dashboard() {
           icon={Activity} label="Em andamento" value={c.emAndamento} color="amber"
           to="/ordens?status=em_andamento"
         />
-        <StatCard
-          icon={AlertTriangle} label="Atrasadas" value={c.atrasadas} color="rose"
-          to="/ordens?late=true"
-        />
+        
         <StatCard
           icon={CheckCircle2} label="Finalizadas" value={c.finalizadas + c.entregues} color="emerald"
           to="/ordens?status=finalizada"
