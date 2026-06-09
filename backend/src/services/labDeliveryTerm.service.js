@@ -18,7 +18,7 @@ const Counter = require('../models/Counter');
 // ====================================================================
 // Imagens do modelo oficial (cabeçalho e rodapé)
 // ====================================================================
-const ASSETS_DIR = path.join(__dirname, '..',  'assets');
+const ASSETS_DIR = path.join(__dirname, '..', 'assets');
 const HEADER_IMG = path.join(ASSETS_DIR, 'term-header.png');
 const FOOTER_IMG = path.join(ASSETS_DIR, 'term-footer.png');
 
@@ -33,16 +33,35 @@ const EQUIPMENT_LABEL = {
   notebook: 'Notebooks',
   impressora: 'Impressoras',
   roteador: 'Roteadores',
-  nobreak: 'Estabilizadores / Nobreaks',
+  nobreak: 'Nobreaks',
+  estabilizador: 'Estabilizadores',
   tablet: 'Tablets',
+  mouse: 'Mouses',
+  teclado: 'Teclados',
+  monitor: 'Monitores',
+  memoria_ram: 'Memórias RAM',
+  fonte: 'Fontes',
+  caixa_cabo_rj45: 'Caixas de cabo RJ45',
   outro: 'Outros',
 };
+
+// Para tipos customizados não mapeados, formata "memoria_ram" → "Memória ram"
+function prettyType(t) {
+  if (!t) return '-';
+  if (EQUIPMENT_LABEL[t]) return EQUIPMENT_LABEL[t];
+  const s = String(t).replace(/_/g, ' ').trim();
+  return s.charAt(0).toUpperCase() + s.slice(1) + 's';
+}
 
 const CONDITION_LABEL = {
   novo: 'Novo',
   usado: 'Usado',
   recondicionado: 'Recondicionado',
 };
+
+function kindLabel(kind) {
+  return kind === 'administrativo' ? 'Setor Administrativo' : 'Laboratório de Informática';
+}
 
 function formatDateBR(date = new Date()) {
   const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -65,7 +84,7 @@ async function loadLabData(labId) {
   await ensureTermNumber(lab);
   const items = (lab.equipments || []).map((eq) => ({
     qty: eq.quantity,
-    description: EQUIPMENT_LABEL[eq.type] || eq.type,
+    description: prettyType(eq.type),
     situation: CONDITION_LABEL[eq.condition] || 'Novo',
   }));
   return { lab, items };
@@ -159,7 +178,7 @@ function buildPdf(labId) {
       // ============ Número do termo + data ============
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a');
       const titleY = doc.y;
-      doc.text(`Termo de Entrega n° ${lab.deliveryTermNumber}`, 50, titleY);
+      doc.text(`Termo de Entrega n° ${lab.deliveryTermNumber} — ${kindLabel(lab.kind)}`, 50, titleY);
       doc.font('Helvetica').text(
         `Abaetetuba, ${formatDateBR(lab.assemblyDate || new Date())}.`,
         50, titleY, { width: contentW, align: 'right' }
@@ -304,7 +323,7 @@ async function buildDocx(labId) {
   const titleRow = new Paragraph({
     spacing: { after: 240 },
     children: [
-      new TextRun({ text: `Termo de Entrega n° ${lab.deliveryTermNumber}`, bold: true, size: 22, font: 'Calibri' }),
+      new TextRun({ text: `Termo de Entrega n° ${lab.deliveryTermNumber} — ${kindLabel(lab.kind)}`, bold: true, size: 22, font: 'Calibri' }),
       new TextRun({ text: '\t\t\t', size: 22, font: 'Calibri' }),
       new TextRun({
         text: `Abaetetuba, ${formatDateBR(lab.assemblyDate || new Date())}.`,
@@ -361,7 +380,7 @@ async function buildDocx(labId) {
 
   const doc = new Document({
     creator: 'CTEC - SEMEC Abaetetuba',
-    title: `Termo de Entrega ${lab.deliveryTermNumber}`,
+    title: `Termo de Entrega ${lab.deliveryTermNumber} - ${kindLabel(lab.kind)}`,
     sections: [{
       properties: {
         page: {

@@ -32,9 +32,10 @@ exports.get = asyncHandler(async (req, res) => {
 });
 
 exports.create = asyncHandler(async (req, res) => {
-  const { name, school, equipments = [], responsibleTech, responsibles, status, assemblyDate, notes } = req.body;
-  if (!name) throw new AppError('Informe o nome do laboratório', 400);
+  const { name, school, equipments = [], responsibleTech, responsibles, status, assemblyDate, notes, kind } = req.body;
+  if (!name) throw new AppError('Informe o nome do espaço', 400);
   if (!school) throw new AppError('Selecione a escola', 400);
+  const kindNorm = (kind === 'administrativo') ? 'administrativo' : 'laboratorio';
 
   const normEqs = (equipments || []).map(e => ({
     type: String(e.type || '').toLowerCase().trim(),
@@ -52,6 +53,7 @@ exports.create = asyncHandler(async (req, res) => {
 
   const lab = await Laboratory.create({
     name,
+    kind: kindNorm,
     school,
     responsibleTech: responsibleTech || undefined,
     responsibles: Array.isArray(responsibles) ? responsibles.filter(Boolean) : [],
@@ -63,7 +65,7 @@ exports.create = asyncHandler(async (req, res) => {
     history: [{
       user: req.user._id,
       action: 'criado',
-      note: `Laboratório criado com ${normEqs.reduce((a, e) => a + e.quantity, 0)} equipamento(s)`,
+      note: `${kindNorm === 'administrativo' ? 'Setor Administrativo' : 'Laboratório'} criado com ${normEqs.reduce((a, e) => a + e.quantity, 0)} equipamento(s)`,
     }],
   });
 
@@ -76,6 +78,12 @@ exports.update = asyncHandler(async (req, res) => {
   if (!lab) throw new AppError('Laboratório não encontrado', 404);
 
   const { equipments, ...rest } = req.body;
+
+  // Normaliza kind se vier
+  if (Object.prototype.hasOwnProperty.call(rest, 'kind')) {
+    rest.kind = (rest.kind === 'administrativo') ? 'administrativo' : 'laboratorio';
+  }
+
   const oldStatus = lab.status;
 
   // Edição de equipamentos (apenas ADMIN pode incluir/excluir/alterar)

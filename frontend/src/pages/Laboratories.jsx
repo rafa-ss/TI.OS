@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Plus, Search, Pencil, Trash2, FlaskConical, Package,
-  CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer, FileText, FileType,
-  Wifi, Battery, Tablet, HelpCircle, AlertTriangle, Mouse, Keyboard, Cpu, Cable, Zap, MemoryStick, Hash
+  CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer,
+  Wifi, Battery, Tablet, HelpCircle, AlertTriangle, Mouse, Keyboard, Cpu, Cable, Zap, MemoryStick, Hash,
+  Building2, Briefcase
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -28,6 +29,23 @@ const STATUS_COLOR = {
   concluido: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   manutencao: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
   desativado: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+};
+
+const KIND_LABEL = {
+  laboratorio: 'Laboratório de Informática',
+  administrativo: 'Setor Administrativo',
+};
+const KIND_SHORT = {
+  laboratorio: 'Laboratório',
+  administrativo: 'Administrativo',
+};
+const KIND_COLOR = {
+  laboratorio: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  administrativo: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+};
+const KIND_ICON = {
+  laboratorio: FlaskConical,
+  administrativo: Briefcase,
 };
 
 // Tipos sugeridos por padrão (caso a API /stock/types ainda não tenha respondido)
@@ -59,6 +77,8 @@ export default function Laboratories() {
   const [editing, setEditing] = useState(null);
   const [summary, setSummary] = useState(null);
   const [deactivating, setDeactivating] = useState(null);
+  // Lab selecionado pra mostrar detalhes (tipo "Termo de Entrega")
+  const [detailing, setDetailing] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,26 +96,38 @@ export default function Laboratories() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function downloadTerm(lab, format) {
+  /**
+   * Abre o termo de entrega (PDF) numa nova aba já pronto pra impressão.
+   * Usa o blob da API + Authorization, então não vaza token na URL.
+   */
+  async function printTerm(lab) {
+    const loadingId = toast.loading('Gerando termo para impressão...');
     try {
       const token = localStorage.getItem('os_token');
       const res = await fetch(
-        `${api.defaults.baseURL}/laboratories/${lab._id}/term/${format}`,
+        `${api.defaults.baseURL}/laboratories/${lab._id}/term/pdf`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error('Falha ao gerar termo');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `termo-entrega-${(lab.deliveryTermNumber || lab._id).toString().replace('/', '-')}.${format === 'pdf' ? 'pdf' : 'docx'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success(`Termo ${format.toUpperCase()} baixado`);
+      const win = window.open(url, '_blank');
+      if (!win) {
+        toast.dismiss(loadingId);
+        toast.error('Permita janelas pop-up neste site para imprimir.');
+        return;
+      }
+      // Quando o PDF carregar na nova aba, dispara o diálogo de impressão.
+      win.addEventListener('load', () => {
+        try { setTimeout(() => win.print(), 300); } catch {}
+      });
+      toast.dismiss(loadingId);
+      toast.success('Termo aberto em nova aba');
+      // Limpa o blob URL depois de 5 min
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
     } catch (err) {
-      toast.error(err.message || 'Erro ao baixar termo');
+      toast.dismiss(loadingId);
+      toast.error(err.message || 'Erro ao gerar termo');
     }
   }
 
@@ -116,18 +148,18 @@ export default function Laboratories() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <FlaskConical className="text-brand-600" size={26}/>
-            Laboratórios de Informática
+            Laboratórios e Setores Administrativos
           </h1>
           <p className="text-sm text-slate-500">
-            Cada novo laboratório debita automaticamente os equipamentos do estoque.
+            Cada novo cadastro debita automaticamente os equipamentos do estoque.
           </p>
         </div>
         <button onClick={() => { setEditing(null); setOpen(true); }} className="btn-primary">
-          <Plus size={16}/> Novo laboratório
+          <Plus size={16}/> Novo Laboratório/Administrativo
         </button>
       </div>
 
@@ -167,43 +199,53 @@ export default function Laboratories() {
           <div className="overflow-x-auto">
             <table className="table-modern">
               <thead><tr>
-                <th>Laboratório</th>
+                <th className="w-[90px] text-center">Nº Termo</th>
                 <th>Escola</th>
-                <th>Equipamentos</th>
-                <th>Status</th>
+                <th className="w-[140px]">Tipo</th>
+                <th className="w-[120px]">Status</th>
                 <th>Responsáveis</th>
-                <th>Montagem</th>
-                <th></th>
+                <th className="w-[110px] text-center">Data</th>
+                <th className="w-[60px] text-right pr-2">Ações</th>
               </tr></thead>
               <tbody>
                 {items.map(lab => {
-                  const totalEq = lab.equipments.reduce((a, e) => a + e.quantity, 0);
+                  const kind = lab.kind || 'laboratorio';
+                  const KindIcon = KIND_ICON[kind] || FlaskConical;
                   return (
-                    <tr key={lab._id}>
-                      <td className="font-semibold">
+                    <tr key={lab._id}
+                      onClick={() => setDetailing(lab)}
+                      className="align-middle cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      {/* Nº Termo */}
+                      <td className="text-center">
+                        {lab.deliveryTermNumber ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                            <Hash size={10}/>{lab.deliveryTermNumber}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">não emitido</span>
+                        )}
+                      </td>
+                      {/* Escola */}
+                      <td className="text-sm">
                         <div className="flex items-center gap-2">
-                          <FlaskConical size={16} className="text-brand-600 shrink-0"/>
-                          {lab.name}
+                          <KindIcon size={16} className="text-brand-600 shrink-0"/>
+                          <span className="font-medium truncate max-w-[260px]" title={lab.school?.name || ''}>
+                            {lab.school?.name || '-'}
+                          </span>
                         </div>
+                        <span className="text-[10px] text-slate-500 ml-6">{lab.name}</span>
                       </td>
-                      <td className="text-sm max-w-[200px] truncate">{lab.school?.name || '-'}</td>
+                      {/* Tipo */}
                       <td>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {lab.equipments.length === 0 ? (
-                            <span className="text-xs text-slate-400 italic">sem equipamentos</span>
-                          ) : lab.equipments.map((eq, i) => {
-                            const Icon = TYPE_ICONS[eq.type] || HelpCircle;
-                            return (
-                              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-xs">
-                                <Icon size={12}/>
-                                <b>{eq.quantity}×</b> {typeLabel(eq.type)}
-                              </span>
-                            );
-                          })}
-                        </div>
-                        <span className="text-[10px] text-slate-500">{totalEq} unid. no total</span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${KIND_COLOR[kind]}`}>
+                          <KindIcon size={11}/>{KIND_SHORT[kind]}
+                        </span>
                       </td>
-                      <td><span className={`badge ${STATUS_COLOR[lab.status]}`}>{STATUS_LABEL[lab.status]}</span></td>
+                      {/* Status */}
+                      <td>
+                        <span className={`badge ${STATUS_COLOR[lab.status]}`}>{STATUS_LABEL[lab.status]}</span>
+                      </td>
+                      {/* Responsáveis */}
                       <td className="text-sm">
                         {(lab.responsibles && lab.responsibles.length > 0) ? (
                           <div className="flex flex-wrap gap-1">
@@ -229,25 +271,20 @@ export default function Laboratories() {
                           <span className="text-slate-400 italic text-xs">sem responsáveis</span>
                         )}
                       </td>
-                      <td className="text-xs">{lab.assemblyDate ? formatDate(lab.assemblyDate).split(' ')[0] : '-'}</td>
-                      <td className="flex justify-end gap-1">
-                        <button onClick={() => downloadTerm(lab, 'pdf')} className="btn-ghost p-1.5 text-rose-600"
-                          title="Baixar termo em PDF">
-                          <FileText size={16}/>
-                        </button>
-                        <button onClick={() => downloadTerm(lab, 'docx')} className="btn-ghost p-1.5 text-blue-600"
-                          title="Baixar termo em Word">
-                          <FileType size={16}/>
-                        </button>
-                        {!lab.returnedToStock && lab.status !== 'desativado' && (
-                          <button onClick={() => setDeactivating(lab)} className="btn-ghost p-1.5 text-amber-600"
-                            title="Desativar e devolver ao estoque">
-                            <ArrowLeftCircle size={16}/>
+                      {/* Data */}
+                      <td className="text-xs text-center text-slate-600 dark:text-slate-300">
+                        {lab.assemblyDate ? formatDate(lab.assemblyDate).split(' ')[0] : '-'}
+                      </td>
+                      {/* Ações (apenas Excluir; demais ficam no modal de detalhes) */}
+                      <td className="text-right pr-2" onClick={e => e.stopPropagation()}>
+                        {isAdmin ? (
+                          <button onClick={() => remove(lab)}
+                            className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+                            title="Excluir laboratório">
+                            <Trash2 size={16}/>
                           </button>
-                        )}
-                        <button onClick={() => { setEditing(lab); setOpen(true); }} className="btn-ghost p-1.5" title="Editar"><Pencil size={16}/></button>
-                        {isAdmin && (
-                          <button onClick={() => remove(lab)} className="btn-ghost p-1.5 text-rose-500" title="Excluir"><Trash2 size={16}/></button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">—</span>
                         )}
                       </td>
                     </tr>
@@ -265,6 +302,206 @@ export default function Laboratories() {
         onSaved={() => { setOpen(false); load(); }}/>
       <DeactivateModal lab={deactivating} onClose={() => setDeactivating(null)}
         onDone={() => { setDeactivating(null); load(); }}/>
+      <LabDetailModal
+        lab={detailing}
+        onClose={() => setDetailing(null)}
+        isAdmin={isAdmin}
+        onPrint={printTerm}
+        onEdit={(lab) => { setDetailing(null); setEditing(lab); setOpen(true); }}
+        onDeactivate={(lab) => { setDetailing(null); setDeactivating(lab); }}
+      />
+    </div>
+  );
+}
+
+// =============================================================
+// Modal de Detalhes do Laboratório/Setor — visualização completa
+// (estilo "termo": tudo bonito, organizado em seções, com ações no rodapé)
+// =============================================================
+function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }) {
+  if (!lab) return null;
+  const kind = lab.kind || 'laboratorio';
+  const KindIcon = KIND_ICON[kind] || FlaskConical;
+  const totalEq = (lab.equipments || []).reduce((a, e) => a + e.quantity, 0);
+  const active = !lab.returnedToStock && lab.status !== 'desativado';
+
+  // Cabeçalho colorido do modal
+  const headerColor = kind === 'administrativo' ? 'from-sky-500 to-sky-600' : 'from-indigo-500 to-indigo-600';
+
+  return (
+    <Modal open={!!lab} onClose={onClose} size="lg"
+      title={
+        <div className="flex items-center gap-2">
+          <KindIcon size={22}/>
+          <span>Detalhes — {lab.name}</span>
+        </div>
+      }
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => onPrint(lab)}
+              className="btn-primary !bg-indigo-600 hover:!bg-indigo-700">
+              <Printer size={16}/> Imprimir Termo
+            </button>
+            <button onClick={() => onEdit(lab)} className="btn-secondary">
+              <Pencil size={16}/> Editar
+            </button>
+            {active && (
+              <button onClick={() => onDeactivate(lab)}
+                className="btn-secondary !text-amber-700 !border-amber-300 hover:!bg-amber-50 dark:!text-amber-300 dark:!border-amber-800 dark:hover:!bg-amber-900/30">
+                <ArrowLeftCircle size={16}/> Desativar
+              </button>
+            )}
+          </div>
+          <button onClick={onClose} className="btn-ghost">Fechar</button>
+        </div>
+      }>
+      <div className="space-y-4">
+        {/* Cabeçalho com Nº do termo e tipo */}
+        <div className={`rounded-xl p-4 text-white bg-gradient-to-r ${headerColor} shadow-sm`}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-[11px] uppercase opacity-80 font-semibold tracking-wider">{KIND_LABEL[kind]}</p>
+              <p className="text-lg font-bold leading-tight">{lab.name}</p>
+              <p className="text-xs opacity-90 mt-0.5">{lab.school?.name || '—'}{lab.school?.inep ? ` · INEP ${lab.school.inep}` : ''}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase opacity-80 font-semibold tracking-wider">Nº do Termo</p>
+              {lab.deliveryTermNumber ? (
+                <p className="text-2xl font-mono font-bold tracking-wide">{lab.deliveryTermNumber}</p>
+              ) : (
+                <p className="text-xs italic opacity-80">não emitido</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Grade de informações principais */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <DetailField label="Status">
+            <span className={`badge ${STATUS_COLOR[lab.status]}`}>{STATUS_LABEL[lab.status]}</span>
+          </DetailField>
+          <DetailField label="Tipo de espaço">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${KIND_COLOR[kind]}`}>
+              <KindIcon size={11}/>{KIND_SHORT[kind]}
+            </span>
+          </DetailField>
+          <DetailField label="Data de montagem">
+            <span className="text-sm font-medium">
+              {lab.assemblyDate ? formatDate(lab.assemblyDate).split(' ')[0] : '—'}
+            </span>
+          </DetailField>
+          <DetailField label="Data de conclusão">
+            <span className="text-sm font-medium">
+              {lab.completionDate ? formatDate(lab.completionDate).split(' ')[0] : '—'}
+            </span>
+          </DetailField>
+        </div>
+
+        {/* Responsáveis */}
+        <section className="card p-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+            👥 Responsáveis pela montagem
+          </h4>
+          {(lab.responsibles && lab.responsibles.length > 0) ? (
+            <div className="flex flex-wrap gap-1">
+              {lab.responsibles.map(r => {
+                const cls = r.role === 'admin'
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                  : r.role === 'atendente'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+                const icon = r.role === 'admin' ? '👤' : r.role === 'atendente' ? '☎️' : '🔧';
+                const roleStr = r.role === 'admin' ? 'Admin' : r.role === 'atendente' ? 'Atendente' : 'Técnico';
+                return (
+                  <span key={r._id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs ${cls}`}>
+                    {icon} {r.name} <span className="opacity-60">({roleStr})</span>
+                  </span>
+                );
+              })}
+            </div>
+          ) : lab.responsibleTech?.name ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              🔧 {lab.responsibleTech.name}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400 italic">Nenhum responsável atribuído</span>
+          )}
+        </section>
+
+        {/* Equipamentos */}
+        <section className="card p-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between gap-1">
+            <span className="flex items-center gap-1"><Package size={14}/> Equipamentos</span>
+            {totalEq > 0 && <span className="text-[10px] text-slate-500 font-medium normal-case">{totalEq} unid. no total</span>}
+          </h4>
+          {(!lab.equipments || lab.equipments.length === 0) ? (
+            <p className="text-xs text-slate-400 italic">Nenhum equipamento atribuído</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {lab.equipments.map((eq, i) => {
+                const Icon = TYPE_ICONS[eq.type] || HelpCircle;
+                return (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800/40 text-sm">
+                    <Icon size={16} className="text-brand-600 shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{typeLabel(eq.type)}</p>
+                      <p className="text-[10px] text-slate-500 capitalize">{eq.condition}</p>
+                    </div>
+                    <span className="text-base font-bold text-brand-600">{eq.quantity}×</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Observações */}
+        {lab.notes && (
+          <section className="card p-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">📝 Observações</h4>
+            <p className="text-sm whitespace-pre-line">{lab.notes}</p>
+          </section>
+        )}
+
+        {/* Histórico */}
+        {lab.history && lab.history.length > 0 && (
+          <section className="card p-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+              🕒 Histórico ({lab.history.length})
+            </h4>
+            <div className="max-h-[200px] overflow-y-auto space-y-1.5 pr-1">
+              {[...lab.history].reverse().map((h, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs p-2 rounded bg-slate-50 dark:bg-slate-800/40">
+                  <span className="text-slate-400 font-mono shrink-0">{formatDate(h.date)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-700 dark:text-slate-200">{h.action || '—'}</p>
+                    {h.note && <p className="text-slate-500 dark:text-slate-400">{h.note}</p>}
+                    {h.user?.name && <p className="text-[10px] text-slate-400">por {h.user.name}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Rodapé com dados de criação */}
+        <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-3 gap-y-0.5">
+          {lab.createdBy?.name && <span>Criado por: <b>{lab.createdBy.name}</b></span>}
+          {lab.createdAt && <span>Em: {formatDate(lab.createdAt)}</span>}
+          {lab.updatedAt && lab.updatedAt !== lab.createdAt && <span>Última atualização: {formatDate(lab.updatedAt)}</span>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Campo "etiqueta + valor" usado no modal de detalhes
+function DetailField({ label, children }) {
+  return (
+    <div className="card p-2.5">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">{label}</p>
+      <div>{children}</div>
     </div>
   );
 }
@@ -295,63 +532,127 @@ function StatCard({ label, value, color, icon: Icon, onClick }) {
 }
 
 // =============================================================
+// Card de seleção (Laboratório / Administrativo)
+// =============================================================
+function KindCard({ active, icon: Icon, title, description, color = 'indigo', onClick }) {
+  const colorMap = {
+    indigo: {
+      activeBg: 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 ring-indigo-200 dark:ring-indigo-800',
+      icon: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+    },
+    sky: {
+      activeBg: 'bg-sky-50 dark:bg-sky-900/30 border-sky-500 ring-sky-200 dark:ring-sky-800',
+      icon: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    },
+  };
+  const c = colorMap[color] || colorMap.indigo;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3
+        ${active
+          ? `${c.activeBg} ring-4 shadow-md`
+          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/40'}`}
+    >
+      <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 ${c.icon}`}>
+        <Icon size={22}/>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">{title}</p>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">{description}</p>
+      </div>
+      {active && (
+        <CheckCircle2 size={18} className="text-emerald-500 shrink-0"/>
+      )}
+    </button>
+  );
+}
+
+// =============================================================
 // Formulário de Cadastro / Edição
 // =============================================================
 function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
+  // Estado inicial COMPLETAMENTE limpo — sem qualquer resquício
   const empty = {
-    name: '', school: '', status: 'planejado',
-    responsibles: [], assemblyDate: '', notes: '',
+    kind: 'laboratorio',
+    name: '',
+    school: '',
+    status: 'planejado',
+    responsibles: [],
+    assemblyDate: '',
+    notes: '',
     deliveryTermNumber: '',
     equipments: [],
   };
   const [form, setForm] = useState(empty);
   const [staff, setStaff] = useState([]);  // técnicos + admins + atendentes
   const [stockSummary, setStockSummary] = useState(null);
-  const [stockTypes, setStockTypes] = useState(SUGGESTED_TYPES);
+  // Tipos que TÊM estoque disponível (computado a partir do /stock/summary)
+  // Default: vazio — só mostra o que realmente existe no estoque.
+  const [availableTypes, setAvailableTypes] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  // SEMPRE que o modal abrir (com lab ou sem), zera o form ANTES de carregar dados.
+  // Isso elimina qualquer resquício de cadastros anteriores.
   useEffect(() => {
-    if (!open) return;
-    // Carrega técnicos + admins + atendentes (todos podem ser responsáveis pela montagem)
+    if (!open) { setForm(empty); return; }
+    // Reseta primeiro pra evitar piscar dados do form anterior
+    setForm(empty);
+    setStaff([]);
+    setAvailableTypes([]);
+    setStockSummary(null);
+
+    // Carrega técnicos + admins + atendentes
     Promise.all([
-      api.get('/users', { params: { role: 'tecnico',  limit: 100, active: true } }),
-      api.get('/users', { params: { role: 'admin',    limit: 100, active: true } }),
+      api.get('/users', { params: { role: 'tecnico',   limit: 100, active: true } }),
+      api.get('/users', { params: { role: 'admin',     limit: 100, active: true } }),
       api.get('/users', { params: { role: 'atendente', limit: 100, active: true } }),
     ]).then(([t, a, at]) => {
       const list = [...t.data.items, ...a.data.items, ...at.data.items];
-      // remove duplicatas por _id (caso algum venha em mais de uma lista)
       const map = new Map(list.map(u => [u._id, u]));
       setStaff([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
     }).catch(() => {});
-    // Tipos disponíveis no estoque (padrões + customizados que o usuário cadastrou)
-    api.get('/stock/types')
-      .then(r => {
-        const items = (r.data?.items || []).filter(Boolean);
-        // mantém os sugeridos como fallback caso o estoque esteja vazio
-        const merged = Array.from(new Set([...items, ...SUGGESTED_TYPES])).sort();
-        setStockTypes(merged);
-      }).catch(() => setStockTypes(SUGGESTED_TYPES));
+
+    // Estoque: pega summary (já tem byType com totais)
     api.get('/stock/summary')
-      .then(r => setStockSummary(r.data.data)).catch(() => {});
-    setForm(lab
-      ? {
-          ...empty, ...lab,
-          school: lab.school?._id || '',
-          responsibles: lab.responsibles && lab.responsibles.length > 0
-            ? lab.responsibles.map(r => r._id)
-            : (lab.responsibleTech?._id ? [lab.responsibleTech._id] : []),
-          assemblyDate: lab.assemblyDate ? String(lab.assemblyDate).slice(0,10) : '',
-          deliveryTermNumber: lab.deliveryTermNumber || '',
-          equipments: lab.equipments || [],
-        }
-      : empty);
+      .then(r => {
+        const data = r.data?.data;
+        setStockSummary(data);
+        // Só os tipos COM ESTOQUE > 0 — bem mais intuitivo
+        const tipos = (data?.byType || [])
+          .filter(x => (x.total || 0) > 0)
+          .map(x => x._id)
+          .filter(Boolean)
+          .sort();
+        setAvailableTypes(tipos);
+      }).catch(() => {});
+
+    // Preenche o form com dados do lab (modo edição)
+    if (lab) {
+      setForm({
+        ...empty,
+        kind: lab.kind || 'laboratorio',
+        name: lab.name || '',
+        school: lab.school?._id || '',
+        status: lab.status || 'planejado',
+        responsibles: lab.responsibles && lab.responsibles.length > 0
+          ? lab.responsibles.map(r => r._id)
+          : (lab.responsibleTech?._id ? [lab.responsibleTech._id] : []),
+        assemblyDate: lab.assemblyDate ? String(lab.assemblyDate).slice(0,10) : '',
+        notes: lab.notes || '',
+        deliveryTermNumber: lab.deliveryTermNumber || '',
+        equipments: Array.isArray(lab.equipments) ? lab.equipments.map(e => ({ ...e })) : [],
+      });
+    }
     // eslint-disable-next-line
   }, [open, lab]);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
   function addEquip() {
-    set('equipments', [...form.equipments, { type: 'computador', condition: 'novo', quantity: 1 }]);
+    const defaultType = availableTypes[0] || 'computador';
+    set('equipments', [...form.equipments, { type: defaultType, condition: 'novo', quantity: 1 }]);
   }
   function updateEquip(i, field, value) {
     const next = [...form.equipments];
@@ -369,7 +670,7 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
 
   async function submit(e) {
     e?.preventDefault();
-    if (!form.name.trim()) return toast.error('Informe o nome do laboratório');
+    if (!form.name.trim()) return toast.error(form.kind === 'administrativo' ? 'Informe o nome do setor' : 'Informe o nome do laboratório');
     if (!form.school) return toast.error('Selecione a escola');
 
     setSaving(true);
@@ -396,7 +697,9 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
         // Criação: deliveryTermNumber sempre é gerado pelo sistema
         delete payload.deliveryTermNumber;
         await api.post('/laboratories', payload);
-        toast.success('Laboratório criado e equipamentos debitados do estoque');
+        toast.success(payload.kind === 'administrativo'
+          ? 'Setor administrativo criado e equipamentos debitados do estoque'
+          : 'Laboratório criado e equipamentos debitados do estoque');
       }
       onSaved?.();
     } catch (err) {
@@ -412,7 +715,9 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
 
   return (
     <Modal open={open} onClose={onClose} size="lg"
-      title={lab ? `Editar ${lab.name}` : 'Novo Laboratório de Informática'}
+      title={lab
+        ? `Editar — ${lab.name}`
+        : `Novo cadastro — ${KIND_LABEL[form.kind] || 'Laboratório'}`}
       footer={<>
         <button onClick={onClose} className="btn-secondary">Cancelar</button>
         <button onClick={submit} disabled={saving} className="btn-primary">
@@ -420,12 +725,41 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
         </button>
       </>}>
       <form onSubmit={submit} className="space-y-5">
+        {/* === TIPO DE ESPAÇO === */}
+        <section>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2">Laboratório/Administrativo *</h3>
+          <p className="text-xs text-slate-500 mb-3">Esta escolha aparecerá no <b>Termo de Entrega</b> impresso.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <KindCard
+              active={form.kind === 'laboratorio'}
+              icon={FlaskConical}
+              title="Laboratório de Informática"
+              description="Sala equipada para uso pedagógico (alunos)"
+              color="indigo"
+              onClick={() => set('kind', 'laboratorio')}
+            />
+            <KindCard
+              active={form.kind === 'administrativo'}
+              icon={Briefcase}
+              title="Setor Administrativo"
+              description="Secretaria, direção, sala de professores etc."
+              color="sky"
+              onClick={() => set('kind', 'administrativo')}
+            />
+          </div>
+        </section>
+
         <section>
           <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Informações gerais</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
-              <label className="label">Nome do laboratório *</label>
-              <input required className="input" placeholder='Ex.: "Laboratório de Informática - Sala 03"'
+              <label className="label">
+                Nome {form.kind === 'administrativo' ? 'do setor' : 'do laboratório'} *
+              </label>
+              <input required className="input"
+                placeholder={form.kind === 'administrativo'
+                  ? 'Ex.: "Secretaria Escolar", "Sala da Direção"'
+                  : 'Ex.: "Laboratório de Informática - Sala 03"'}
                 value={form.name} onChange={e => set('name', e.target.value)}/>
             </div>
             <div>
@@ -495,14 +829,29 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <Package size={16}/> {lab ? 'Equipamentos do laboratório' : 'Equipamentos a serem retirados do estoque'}
               </h3>
-              <button type="button" onClick={addEquip} className="btn-secondary !py-1 !px-3 text-xs">
+              <button type="button" onClick={addEquip}
+                disabled={availableTypes.length === 0 && form.equipments.length === 0}
+                className="btn-secondary !py-1 !px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                title={availableTypes.length === 0 ? 'Cadastre itens no estoque primeiro' : 'Adicionar equipamento'}>
                 <Plus size={14}/> Adicionar
               </button>
             </div>
 
             {form.equipments.length === 0 ? (
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center text-sm text-slate-500">
-                Clique em "Adicionar" para incluir equipamentos.
+              <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg p-5 text-center">
+                {availableTypes.length === 0 ? (
+                  <>
+                    <Package size={28} className="mx-auto text-slate-400 mb-1"/>
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Nenhum equipamento no estoque</p>
+                    <p className="text-xs text-slate-500 mt-1">Cadastre lotes em <b>Estoque</b> antes de retirar equipamentos.</p>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={24} className="mx-auto text-slate-400 mb-1"/>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">Clique em "Adicionar" para incluir equipamentos.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">{availableTypes.length} tipo(s) disponível(is) no estoque: <b>{availableTypes.map(t => typeLabel(t)).join(', ')}</b></p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -519,8 +868,11 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
                       <div className="col-span-4">
                         <label className="text-[10px] uppercase font-semibold text-slate-500">Tipo</label>
                         <select className="input !py-1.5" value={eq.type} onChange={e => updateEquip(i, 'type', e.target.value)}>
-                          {/* Garante que o tipo atual do item apareça mesmo se não estiver na lista do estoque */}
-                          {(stockTypes.includes(eq.type) ? stockTypes : [eq.type, ...stockTypes]).map(t => (
+                          {availableTypes.length === 0 && (
+                            <option value="">— estoque vazio —</option>
+                          )}
+                          {/* Garante que o tipo atual apareça mesmo se já foi todo retirado do estoque (modo edição) */}
+                          {(eq.type && !availableTypes.includes(eq.type) ? [eq.type, ...availableTypes] : availableTypes).map(t => (
                             <option key={t} value={t}>{typeLabel(t)}</option>
                           ))}
                         </select>
