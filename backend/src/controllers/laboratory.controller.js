@@ -1,9 +1,12 @@
 const asyncHandler = require('../utils/asyncHandler');
 const Laboratory = require('../models/Laboratory');
+const StockItem = require('../models/StockItem');
 const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
 const labService = require('../services/laboratory.service');
+const kitService = require('../services/kit.service');
 const termService = require('../services/labDeliveryTerm.service');
+const { generateTermNumber } = require('../services/termNumber.service');
 
 const populateRefs = [
   { path: 'school', select: 'name inep municipio' },
@@ -32,24 +35,40 @@ exports.get = asyncHandler(async (req, res) => {
 });
 
 exports.create = asyncHandler(async (req, res) => {
-  const { name, school, equipments = [], responsibleTech, responsibles, status, assemblyDate, notes, kind } = req.body;
+  const { name, school, equipments = [], kits = [], responsibleTech, responsibles, status, assemblyDate, notes, kind } = req.body;
   if (!name) throw new AppError('Informe o nome do espaço', 400);
   if (!school) throw new AppError('Selecione a escola', 400);
   const kindNorm = (kind === 'administrativo') ? 'administrativo' : 'laboratorio';
 
-  const normEqs = (equipments || []).map(e => ({
+  // Itens avulsos enviados diretamente
+  const avulsos = (equipments || []).map(e => ({
     type: String(e.type || '').toLowerCase().trim(),
     condition: e.condition || 'novo',
     quantity: Number(e.quantity) || 0,
   })).filter(e => e.type && e.quantity > 0);
 
+  // Kits → explode em componentes individuais
+  const { components: kitComponents, snapshots: kitSnapshots } = await kitService.expandKits(kits);
+
+  // Inventário real = avulsos + componentes de kits (agregado por tipo/condição)
+  const normEqs = kitService.mergeComponents(avulsos, kitComponents);
+
   if (normEqs.length > 0) {
-    const check = await labService.checkAvailability(normEqs);
-    if (!check.ok) {
-      throw new AppError('Estoque insuficiente para montar este laboratório', 400, check.missing);
-    }
+    await kitService.ensureStock(normEqs, 'Estoque insuficiente para montar este laboratório');
     await labService.debitStock(normEqs);
   }
+
+  const totalKits = kitSnapshots.reduce((a, k) => a + k.quantity, 0);
+
+  // Numeração do Termo de Entrega: 100% automática (NN/AAAA), gerada no backend
+  // na criação. Atômica e anti-duplicidade (ver termNumber.service).
+  const deliveryTermNumber = await generateTermNumber();
+
+  const notaCriacao = [
+    `${kindNorm === 'administrativo' ? 'Setor Administrativo' : 'Laboratório'} criado com ${normEqs.reduce((a, e) => a + e.quantity, 0)} equipamento(s)`,
+    totalKits > 0 ? `(${totalKits} kit(s): ${kitSnapshots.map(k => `${k.quantity}× ${k.name}`).join(', ')})` : '',
+    `· Termo de Entrega nº ${deliveryTermNumber}`,
+  ].filter(Boolean).join(' ');
 
   const lab = await Laboratory.create({
     name,
@@ -61,11 +80,13 @@ exports.create = asyncHandler(async (req, res) => {
     assemblyDate: assemblyDate || undefined,
     notes: notes || '',
     equipments: normEqs,
+    kits: kitSnapshots,
+    deliveryTermNumber,
     createdBy: req.user._id,
     history: [{
       user: req.user._id,
       action: 'criado',
-      note: `${kindNorm === 'administrativo' ? 'Setor Administrativo' : 'Laboratório'} criado com ${normEqs.reduce((a, e) => a + e.quantity, 0)} equipamento(s)`,
+      note: notaCriacao,
     }],
   });
 
@@ -77,7 +98,7 @@ exports.update = asyncHandler(async (req, res) => {
   const lab = await Laboratory.findById(req.params.id);
   if (!lab) throw new AppError('Laboratório não encontrado', 404);
 
-  const { equipments, ...rest } = req.body;
+  const { equipments, kits, ...rest } = req.body;
 
   // Normaliza kind se vier
   if (Object.prototype.hasOwnProperty.call(rest, 'kind')) {
@@ -86,8 +107,9 @@ exports.update = asyncHandler(async (req, res) => {
 
   const oldStatus = lab.status;
 
-  // Edição de equipamentos (apenas ADMIN pode incluir/excluir/alterar)
-  if (Array.isArray(equipments)) {
+  // Edição de equipamentos e/ou kits (apenas ADMIN pode incluir/excluir/alterar)
+  const editingInventory = Array.isArray(equipments) || Array.isArray(kits);
+  if (editingInventory) {
     if (req.user.role !== 'admin') {
       throw new AppError(
         'Apenas administradores podem alterar a lista de equipamentos do laboratório',
@@ -98,11 +120,53 @@ exports.update = asyncHandler(async (req, res) => {
       throw new AppError('Laboratório já desativado — não é possível alterar equipamentos', 400);
     }
 
-    const normEqs = equipments.map(e => ({
+    // Se um dos dois não veio, mantém o que já existe no laboratório.
+    const avulsos = (Array.isArray(equipments) ? equipments : []).map(e => ({
       type: String(e.type || '').toLowerCase().trim(),
       condition: e.condition || 'novo',
       quantity: Number(e.quantity) || 0,
     })).filter(e => e.type && e.quantity > 0);
+
+    // Kits: se enviados, explode; senão, reaproveita o snapshot atual do lab.
+    let kitSnapshots;
+    let kitComponents;
+    if (Array.isArray(kits)) {
+      const expanded = await kitService.expandKits(kits);
+      kitSnapshots = expanded.snapshots;
+      kitComponents = expanded.components;
+    } else {
+      kitSnapshots = (lab.kits || []).map(k => k.toObject ? k.toObject() : k);
+      kitComponents = kitService.mergeComponents(
+        ...(lab.kits || []).map(k => k.components || [])
+      );
+    }
+
+    // Se equipments não veio, preserva os itens avulsos atuais
+    // (inventário atual menos o que veio de kits antigos).
+    let avulsosFinais = avulsos;
+    if (!Array.isArray(equipments)) {
+      const oldKitComponents = kitService.mergeComponents(
+        ...(lab.kits || []).map(k => k.components || [])
+      );
+      // avulsos atuais = inventário atual - componentes dos kits antigos
+      const invMap = new Map();
+      for (const e of lab.equipments || []) {
+        invMap.set(`${e.type}|${e.condition}`, (invMap.get(`${e.type}|${e.condition}`) || 0) + e.quantity);
+      }
+      for (const c of oldKitComponents) {
+        const k = `${c.type}|${c.condition}`;
+        invMap.set(k, (invMap.get(k) || 0) - c.quantity);
+      }
+      avulsosFinais = Array.from(invMap.entries())
+        .map(([key, quantity]) => {
+          const [type, condition] = key.split('|');
+          return { type, condition, quantity };
+        })
+        .filter(e => e.quantity > 0);
+    }
+
+    // Inventário real final = avulsos + componentes dos kits
+    const normEqs = kitService.mergeComponents(avulsosFinais, kitComponents);
 
     const { toDebit, toReturn } = labService.diffEquipments(lab.equipments, normEqs);
 
@@ -120,7 +184,7 @@ exports.update = asyncHandler(async (req, res) => {
     if (toReturn.length > 0) {
       await labService.returnToStock(
         toReturn,
-        'Almoxarifado SEMED',
+        StockItem.DEFAULT_LOCATION,
         `Edição do laboratório "${lab.name}" — equipamentos devolvidos pelo admin`
       );
     }
@@ -129,6 +193,7 @@ exports.update = asyncHandler(async (req, res) => {
     }
 
     lab.equipments = normEqs;
+    lab.kits = kitSnapshots;
 
     if (toDebit.length > 0 || toReturn.length > 0) {
       const partes = [];
@@ -146,63 +211,21 @@ exports.update = asyncHandler(async (req, res) => {
     }
   }
 
-  // === Edição manual do número do Termo de Entrega (apenas ADMIN) ===
+  // O número do Termo de Entrega é 100% automático e imutável: nunca pode ser
+  // definido/alterado manualmente pelo cliente. Ignoramos qualquer tentativa.
   if (Object.prototype.hasOwnProperty.call(rest, 'deliveryTermNumber')) {
-    if (req.user.role !== 'admin') {
-      throw new AppError(
-        'Apenas administradores podem alterar o número do Termo de Entrega',
-        403
-      );
-    }
-    const raw = rest.deliveryTermNumber;
-    if (raw === '' || raw === null) {
-      // Limpa o número (o sistema gerará um novo na próxima emissão do PDF/DOCX)
-      const old = lab.deliveryTermNumber || '(vazio)';
-      lab.deliveryTermNumber = '';
-      lab.history.push({
-        user: req.user._id,
-        action: 'termo_alterado',
-        note: `Nº do termo de entrega limpo (era ${old}). Será gerado novo número na próxima emissão.`,
-      });
-    } else {
-      const val = String(raw).trim();
-      // Aceita: "01/2026", "1/2026", "14/2025" (1-3 dígitos / ano 4 dígitos)
-      const m = val.match(/^\s*(\d{1,3})\s*\/\s*(\d{4})\s*$/);
-      if (!m) {
-        throw new AppError(
-          'Número do termo inválido. Use o formato NN/AAAA (ex.: 01/2026).',
-          400
-        );
-      }
-      const seq = parseInt(m[1], 10);
-      const year = parseInt(m[2], 10);
-      if (seq < 1) throw new AppError('O número sequencial deve ser maior que zero', 400);
-      const normalized = `${String(seq).padStart(2, '0')}/${year}`;
-
-      // Verifica duplicidade (outro lab com o mesmo número)
-      const dup = await Laboratory.findOne({
-        _id: { $ne: lab._id },
-        deliveryTermNumber: normalized,
-      }).select('_id name');
-      if (dup) {
-        throw new AppError(
-          `O número ${normalized} já está em uso pelo laboratório "${dup.name}". Escolha outro número.`,
-          409
-        );
-      }
-
-      const oldNum = lab.deliveryTermNumber || '(vazio)';
-      if (oldNum !== normalized) {
-        lab.deliveryTermNumber = normalized;
-        lab.history.push({
-          user: req.user._id,
-          action: 'termo_alterado',
-          note: `Nº do termo de entrega alterado: ${oldNum} → ${normalized}`,
-        });
-      }
-    }
-    // remove de `rest` pra Object.assign não sobrescrever
     delete rest.deliveryTermNumber;
+  }
+
+  // Rede de segurança: se por algum motivo um lab antigo estiver sem número,
+  // gera automaticamente agora (nunca deixa termo sem numeração).
+  if (!lab.deliveryTermNumber) {
+    lab.deliveryTermNumber = await generateTermNumber();
+    lab.history.push({
+      user: req.user._id,
+      action: 'termo_gerado',
+      note: `Nº do termo de entrega gerado automaticamente: ${lab.deliveryTermNumber}`,
+    });
   }
 
   Object.assign(lab, rest);
@@ -229,7 +252,7 @@ exports.remove = asyncHandler(async (req, res) => {
   if (!lab.returnedToStock && lab.equipments.length > 0) {
     await labService.returnToStock(
       lab.equipments,
-      'Almoxarifado SEMED',
+      StockItem.DEFAULT_LOCATION,
       `Devolução por exclusão do laboratório: ${lab.name}`
     );
   }
@@ -248,7 +271,7 @@ exports.deactivate = asyncHandler(async (req, res) => {
   if (lab.equipments.length > 0) {
     await labService.returnToStock(
       lab.equipments,
-      'Almoxarifado SEMED',
+      StockItem.DEFAULT_LOCATION,
       `Retorno do laboratório "${lab.name}" - ${req.body.note || 'desativado'}`
     );
   }

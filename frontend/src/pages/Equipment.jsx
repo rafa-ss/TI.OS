@@ -24,7 +24,7 @@ const CONDITIONS = [
 
 const TYPE_ICONS = {
   computador: Monitor,
-  notebook: Laptop,
+ // notebook: Laptop,
   impressora: Printer,
   roteador: Wifi,
   nobreak: Battery,

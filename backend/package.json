@@ -11,7 +11,8 @@
     "lint": "echo \"No linter configured\"",
     "set-os-counter": "node src/utils/setOrderCounter.js",
     "merge-stock": "node src/utils/mergeStockDuplicates.js",
-    "reset-lab-term": "node src/utils/resetLabTermCounter.js"
+    "reset-lab-term": "node src/utils/resetLabTermCounter.js",
+    "renumber-terms": "node src/utils/renumberTerms2026.js"
   },
   "keywords": [
     "os",

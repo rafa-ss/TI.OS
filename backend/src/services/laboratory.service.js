@@ -53,12 +53,15 @@ async function debitStock(equipments) {
 
 /**
  * Devolve quantidades ao estoque (cria/incrementa lotes).
+ * O local padrão é o mesmo do estoque (Coordenação de tecnologia educacional)
+ * para que o estorno some no lote existente em vez de duplicar.
  */
-async function returnToStock(equipments, location = 'Almoxarifado SEMED', notes = '') {
+async function returnToStock(equipments, location = StockItem.DEFAULT_LOCATION, notes = '') {
+  const loc = (location || StockItem.DEFAULT_LOCATION).trim();
   for (const eq of equipments) {
     const type = String(eq.type).toLowerCase().trim();
     const existing = await StockItem.findOne({
-      type, condition: eq.condition, location,
+      type, condition: eq.condition, location: loc,
     });
     if (existing) {
       existing.quantity += eq.quantity;
@@ -66,7 +69,7 @@ async function returnToStock(equipments, location = 'Almoxarifado SEMED', notes 
     } else {
       await StockItem.create({
         type, condition: eq.condition,
-        quantity: eq.quantity, location,
+        quantity: eq.quantity, location: loc,
         notes: notes || 'Retorno de laboratório',
       });
     }

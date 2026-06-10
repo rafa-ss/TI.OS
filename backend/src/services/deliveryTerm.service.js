@@ -2,7 +2,7 @@ const PDFDocument = require('pdfkit');
 
 const TYPE_LABEL = {
   computador: 'Computador',
-  notebook: 'Notebook',
+ // notebook: 'Notebook',
   impressora: 'Impressora',
   roteador: 'Roteador',
   nobreak: 'Nobreak',

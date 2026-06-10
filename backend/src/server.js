@@ -3,7 +3,7 @@ const app = require('./app');
 const env = require('./config/env');
 const logger = require('./utils/logger');
 const { connectDatabase } = require('./config/database');
-const { ensureAdmin } = require('./utils/seed');
+const { ensureAdmin, ensureDefaultKits, syncTermCounters } = require('./utils/seed');
 
 async function bootstrap() {
   // Inicia o HTTP imediatamente — não trava sem Mongo
@@ -18,8 +18,10 @@ async function bootstrap() {
   if (mongoose.connection.readyState === 1) {
     try {
       await ensureAdmin();
+      await ensureDefaultKits();
+      await syncTermCounters();
     } catch (err) {
-      logger.warn(`[seed] não foi possível garantir admin: ${err.message}`);
+      logger.warn(`[seed] não foi possível garantir admin/kits/contadores: ${err.message}`);
     }
   } else {
     logger.warn('[boot] API no ar, mas MongoDB indisponível — configure MONGODB_URI no .env');

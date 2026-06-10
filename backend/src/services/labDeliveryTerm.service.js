@@ -13,7 +13,7 @@ const {
   Table, TableRow, TableCell, WidthType, ShadingType, ImageRun,
 } = require('docx');
 const Laboratory = require('../models/Laboratory');
-const Counter = require('../models/Counter');
+const { generateTermNumber } = require('./termNumber.service');
 
 // ====================================================================
 // Imagens do modelo oficial (cabeçalho e rodapé)
@@ -71,9 +71,8 @@ function formatDateBR(date = new Date()) {
 
 async function ensureTermNumber(lab) {
   if (lab.deliveryTermNumber) return lab.deliveryTermNumber;
-  const year = new Date().getFullYear();
-  const seq = await Counter.next(`lab_term_${year}`);
-  lab.deliveryTermNumber = `${String(seq).padStart(2, '0')}/${year}`;
+  // Geração 100% automática, atômica e anti-duplicidade (ano atual).
+  lab.deliveryTermNumber = await generateTermNumber();
   await lab.save();
   return lab.deliveryTermNumber;
 }

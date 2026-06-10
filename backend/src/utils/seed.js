@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 const env = require('../config/env');
 const User = require('../models/User');
+const Kit = require('../models/Kit');
+const Laboratory = require('../models/Laboratory');
 const logger = require('./logger');
 const { connectDatabase } = require('../config/database');
+const { syncCounterToExisting, parseTermNumber } = require('../services/termNumber.service');
 
 async function ensureAdmin() {
   const existing = await User.findOne({ email: env.SEED_ADMIN_EMAIL });
@@ -21,9 +24,79 @@ async function ensureAdmin() {
   return admin;
 }
 
+/**
+ * Garante a existência dos kits padrão (idempotente: cria só os que faltam,
+ * identificando pelo slug). Não sobrescreve kits já editados pelo admin.
+ */
+const DEFAULT_KITS = [
+  {
+    name: 'Computador Completo',
+    description: 'CPU + Monitor + Mouse + Teclado',
+    icon: 'Monitor',
+    components: [
+      { type: 'computador', condition: 'novo', quantityPerKit: 1 },
+      { type: 'monitor', condition: 'novo', quantityPerKit: 1 },
+      { type: 'mouse', condition: 'novo', quantityPerKit: 1 },
+      { type: 'teclado', condition: 'novo', quantityPerKit: 1 },
+    ],
+  },
+  {
+    name: 'Kit Notebook + Mouse',
+    description: 'Notebook + Mouse',
+    icon: 'Laptop',
+    components: [
+      { type: 'notebook', condition: 'novo', quantityPerKit: 1 },
+      { type: 'mouse', condition: 'novo', quantityPerKit: 1 },
+    ],
+  },
+];
+
+async function ensureDefaultKits() {
+  let created = 0;
+  for (const def of DEFAULT_KITS) {
+    const slug = Kit.makeSlug(def.name);
+    const exists = await Kit.findOne({ slug });
+    if (exists) continue;
+    await Kit.create({ ...def, slug, active: true });
+    created += 1;
+  }
+  if (created > 0) logger.info(`[seed] ${created} kit(s) padrão criado(s)`);
+  else logger.info('[seed] kits padrão já existem');
+}
+
+/**
+ * MIGRAÇÃO da numeração dos Termos de Entrega.
+ * Para cada ANO presente nos termos já cadastrados, sincroniza o contador
+ * com o maior número existente — assim a sequência CONTINUA automaticamente
+ * a partir do último termo cadastrado em cada ano (sem duplicar, sem perder
+ * os termos antigos). Idempotente e seguro (só sobe o contador).
+ */
+async function syncTermCounters() {
+  // Descobre todos os anos presentes em deliveryTermNumber
+  const numeros = await Laboratory.find({
+    deliveryTermNumber: { $type: 'string', $gt: '' },
+  }).select('deliveryTermNumber').lean();
+
+  const years = new Set();
+  for (const lab of numeros) {
+    const parsed = parseTermNumber(lab.deliveryTermNumber);
+    if (parsed) years.add(parsed.year);
+  }
+
+  let synced = 0;
+  for (const year of years) {
+    await syncCounterToExisting(year);
+    synced += 1;
+  }
+  if (synced > 0) logger.info(`[seed] contador de termos sincronizado p/ ${synced} ano(s): ${[...years].join(', ')}`);
+  else logger.info('[seed] nenhum termo existente para sincronizar (começará em 01)');
+}
+
 async function runSeed() {
   await connectDatabase();
   await ensureAdmin();
+  await ensureDefaultKits();
+  await syncTermCounters();
   await mongoose.disconnect();
   process.exit(0);
 }
@@ -35,4 +108,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ensureAdmin };
+module.exports = { ensureAdmin, ensureDefaultKits, syncTermCounters };

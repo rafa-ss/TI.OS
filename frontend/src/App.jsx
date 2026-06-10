@@ -7,6 +7,7 @@ import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import Equipment from './pages/Equipment';
 import Laboratories from './pages/Laboratories';
+import Kits from './pages/Kits';
 import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import EquipmentDetail from './pages/EquipmentDetail';
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="ordens/:id" element={<OrderDetail />} />
         <Route path="equipamentos" element={<ProtectedRoute roles={['admin','tecnico']}><Equipment /></ProtectedRoute>} />
         <Route path="laboratorios" element={<ProtectedRoute roles={['admin','tecnico']}><Laboratories /></ProtectedRoute>} />
+        <Route path="kits" element={<ProtectedRoute roles={['admin','tecnico']}><Kits /></ProtectedRoute>} />
         <Route path="equipamentos/:id" element={<ProtectedRoute roles={['admin','tecnico']}><EquipmentDetail /></ProtectedRoute>} />
         <Route path="escolas" element={<Schools />} />
         <Route path="chat" element={<Chat />} />

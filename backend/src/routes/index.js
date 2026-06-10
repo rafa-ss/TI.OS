@@ -6,6 +6,7 @@ router.use('/schools', require('./school.routes'));
 router.use('/stock', require('./stockItem.routes'));
 router.use('/equipment', require('./equipment.routes'));
 router.use('/laboratories', require('./laboratory.routes'));
+router.use('/kits', require('./kit.routes'));
 router.use('/orders', require('./serviceOrder.routes'));
 router.use('/dashboard', require('./dashboard.routes'));
 router.use('/reports', require('./report.routes'));

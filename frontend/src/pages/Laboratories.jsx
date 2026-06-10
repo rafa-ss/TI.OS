@@ -3,7 +3,7 @@ import {
   Plus, Search, Pencil, Trash2, FlaskConical, Package,
   CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer,
   Wifi, Battery, Tablet, HelpCircle, AlertTriangle, Mouse, Keyboard, Cpu, Cable, Zap, MemoryStick, Hash,
-  Building2, Briefcase
+  Building2, Briefcase, Boxes, Minus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -429,10 +429,31 @@ function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }
           )}
         </section>
 
-        {/* Equipamentos */}
+        {/* Kits utilizados */}
+        {Array.isArray(lab.kits) && lab.kits.length > 0 && (
+          <section className="card p-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+              <Boxes size={14}/> Kits montados
+            </h4>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {lab.kits.map((k, i) => (
+                <div key={i} className="p-2 rounded-md bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 text-sm">
+                  <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
+                    <Boxes size={14} className="text-brand-600"/> {k.quantity}× {k.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {(k.components || []).map(c => `${c.quantity}× ${typeLabel(c.type)}`).join(' + ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Equipamentos (inventário real — componentes individuais) */}
         <section className="card p-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between gap-1">
-            <span className="flex items-center gap-1"><Package size={14}/> Equipamentos</span>
+            <span className="flex items-center gap-1"><Package size={14}/> Equipamentos (detalhado)</span>
             {totalEq > 0 && <span className="text-[10px] text-slate-500 font-medium normal-case">{totalEq} unid. no total</span>}
           </h4>
           {(!lab.equipments || lab.equipments.length === 0) ? (
@@ -584,10 +605,12 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
     notes: '',
     deliveryTermNumber: '',
     equipments: [],
+    kits: [], // [{ kit: id, quantity: N }]
   };
   const [form, setForm] = useState(empty);
   const [staff, setStaff] = useState([]);  // técnicos + admins + atendentes
   const [stockSummary, setStockSummary] = useState(null);
+  const [kitsAvailable, setKitsAvailable] = useState([]); // catálogo de kits ativos
   // Tipos que TÊM estoque disponível (computado a partir do /stock/summary)
   // Default: vazio — só mostra o que realmente existe no estoque.
   const [availableTypes, setAvailableTypes] = useState([]);
@@ -602,6 +625,12 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
     setStaff([]);
     setAvailableTypes([]);
     setStockSummary(null);
+    setKitsAvailable([]);
+
+    // Catálogo de kits ativos (para seleção na montagem)
+    api.get('/kits')
+      .then(r => setKitsAvailable(r.data.items || []))
+      .catch(() => {});
 
     // Carrega técnicos + admins + atendentes
     Promise.all([
@@ -643,6 +672,9 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
         notes: lab.notes || '',
         deliveryTermNumber: lab.deliveryTermNumber || '',
         equipments: Array.isArray(lab.equipments) ? lab.equipments.map(e => ({ ...e })) : [],
+        kits: Array.isArray(lab.kits)
+          ? lab.kits.map(k => ({ kit: k.kit?._id || k.kit || k.slug, quantity: k.quantity }))
+          : [],
       });
     }
     // eslint-disable-next-line
@@ -668,6 +700,45 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
     return stockSummary?.byType.find(x => x._id === type)?.total || 0;
   }
 
+  // === KITS ===
+  function setKitQty(kitId, quantity) {
+    const q = Math.max(0, Number(quantity) || 0);
+    const next = form.kits.filter(k => k.kit !== kitId);
+    if (q > 0) next.push({ kit: kitId, quantity: q });
+    set('kits', next);
+  }
+  function getKitQty(kitId) {
+    return form.kits.find(k => k.kit === kitId)?.quantity || 0;
+  }
+
+  // Calcula a demanda total por tipo somando os componentes dos kits
+  // selecionados + os itens avulsos. Usado para checar estoque do kit.
+  function kitComponentDemand() {
+    const demand = {}; // type -> total
+    for (const sel of form.kits) {
+      const kit = kitsAvailable.find(k => k._id === sel.kit);
+      if (!kit) continue;
+      for (const c of kit.components) {
+        demand[c.type] = (demand[c.type] || 0) + (c.quantityPerKit * sel.quantity);
+      }
+    }
+    for (const eq of form.equipments) {
+      demand[eq.type] = (demand[eq.type] || 0) + (Number(eq.quantity) || 0);
+    }
+    return demand;
+  }
+
+  // Retorna lista de faltas: [{ type, need, have }]
+  function kitStockShortages() {
+    const demand = kitComponentDemand();
+    const shortages = [];
+    for (const [type, need] of Object.entries(demand)) {
+      const have = getStockFor(type);
+      if (need > have) shortages.push({ type, need, have });
+    }
+    return shortages;
+  }
+
   async function submit(e) {
     e?.preventDefault();
     if (!form.name.trim()) return toast.error(form.kind === 'administrativo' ? 'Informe o nome do setor' : 'Informe o nome do laboratório');
@@ -678,24 +749,20 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
       const payload = { ...form };
       Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
 
+      // O número do Termo é 100% automático (gerado no backend). Nunca enviamos.
+      delete payload.deliveryTermNumber;
+
       if (lab) {
-        // Admin pode incluir/excluir/alterar equipamentos e o Nº do termo; demais perfis: backend ignora
+        // Admin pode incluir/excluir/alterar equipamentos/kits; demais perfis: backend ignora
         if (!isAdmin) {
           delete payload.equipments;
-          delete payload.deliveryTermNumber;
-        } else {
-          // Não envia o campo se não mudou (evita gravar histórico à toa)
-          const original = (lab.deliveryTermNumber || '').trim();
-          const novo = (payload.deliveryTermNumber || '').trim();
-          if (original === novo) delete payload.deliveryTermNumber;
+          delete payload.kits;
         }
         await api.put(`/laboratories/${lab._id}`, payload);
         toast.success(isAdmin && payload.equipments
           ? 'Laboratório atualizado (estoque ajustado conforme alterações)'
           : 'Laboratório atualizado');
       } else {
-        // Criação: deliveryTermNumber sempre é gerado pelo sistema
-        delete payload.deliveryTermNumber;
         await api.post('/laboratories', payload);
         toast.success(payload.kind === 'administrativo'
           ? 'Setor administrativo criado e equipamentos debitados do estoque'
@@ -796,29 +863,97 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
           </div>
         </section>
 
-        {/* === TERMO DE ENTREGA (somente admin, modo edição) === */}
-        {lab && isAdmin && (
-          <section className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
-              <Hash size={16} className="text-amber-600"/> Nº do Termo de Entrega
-              <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-200 dark:bg-amber-800 dark:text-amber-100 px-1.5 py-0.5 rounded">Admin</span>
-            </h3>
-            <div className="grid md:grid-cols-3 gap-3 items-start">
-              <div className="md:col-span-1">
-                <input
-                  className="input font-mono text-center text-base font-bold"
-                  placeholder="01/2026"
-                  value={form.deliveryTermNumber}
-                  onChange={e => set('deliveryTermNumber', e.target.value)}
-                />
-                <p className="text-[10px] text-slate-500 mt-1 text-center">Formato: <b>NN/AAAA</b> (ex.: 01/2026)</p>
-              </div>
-              <div className="md:col-span-2 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                <p>📝 Use este campo pra <b>ajustar manualmente</b> o número do termo (útil pra laboratórios antigos com numeração já impressa em papel).</p>
-                <p>✏️ Deixe <b>em branco</b> pra o sistema gerar um novo número automaticamente na próxima emissão do PDF/DOCX.</p>
-                <p>⚠️ O sistema não permite usar um número já em uso por outro laboratório.</p>
-              </div>
+        {/* === TERMO DE ENTREGA — numeração 100% automática (somente leitura) === */}
+        <section className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
+            <Hash size={16} className="text-brand-600"/> Nº do Termo de Entrega
+          </h3>
+          {lab && form.deliveryTermNumber ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono text-xl font-bold tracking-wide px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                {form.deliveryTermNumber}
+              </span>
+              <p className="text-xs text-slate-500">
+                🔒 Gerado automaticamente pelo sistema. Sequencial por ano (NN/AAAA) e <b>não editável</b>.
+              </p>
             </div>
+          ) : (
+            <p className="text-xs text-slate-500">
+              🔢 O número será <b>gerado automaticamente</b> pelo sistema ao salvar (formato <b>NN/AAAA</b>, sequencial por ano).
+              Não é necessário digitar nada.
+            </p>
+          )}
+        </section>
+
+        {/* === KITS === */}
+        {(!lab || isAdmin) && kitsAvailable.length > 0 && (
+          <section>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 flex items-center gap-2">
+              <Boxes size={16}/> Kits
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Selecione kits prontos. Cada kit debita seus componentes do estoque automaticamente.
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-2">
+              {kitsAvailable.map((kit) => {
+                const KitIcon = TYPE_ICONS[kit.components?.[0]?.type] || Boxes;
+                const qty = getKitQty(kit._id);
+                const compo = kit.components.map(c => `${c.quantityPerKit}× ${typeLabel(c.type)}`).join(' + ');
+                return (
+                  <div key={kit._id}
+                    className={`p-3 rounded-lg border transition-colors ${
+                      qty > 0
+                        ? 'border-brand-400 bg-brand-50 dark:bg-brand-900/20 dark:border-brand-700'
+                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
+                    }`}>
+                    <div className="flex items-start gap-2">
+                      <div className="w-9 h-9 shrink-0 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 grid place-items-center">
+                        <KitIcon size={18}/>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">{kit.name}</p>
+                        <p className="text-[11px] text-slate-500 truncate" title={compo}>{compo}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mt-2">
+                      <span className="text-[11px] text-slate-500 mr-auto">Quantidade</span>
+                      <button type="button" onClick={() => setKitQty(kit._id, qty - 1)}
+                        disabled={qty <= 0}
+                        className="btn-ghost p-1 disabled:opacity-30">
+                        <Minus size={14}/>
+                      </button>
+                      <input type="number" min="0" className="input !py-1 !w-16 text-center font-bold"
+                        value={qty} onChange={e => setKitQty(kit._id, e.target.value)}/>
+                      <button type="button" onClick={() => setKitQty(kit._id, qty + 1)}
+                        className="btn-ghost p-1">
+                        <Plus size={14}/>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Aviso de estoque insuficiente considerando kits + avulsos */}
+            {(() => {
+              const shortages = kitStockShortages();
+              if (shortages.length === 0) return null;
+              return (
+                <div className="mt-3 text-xs text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-3">
+                  <p className="font-semibold flex items-center gap-1 mb-1">
+                    <AlertTriangle size={14}/> Estoque insuficiente para os kits/itens selecionados:
+                  </p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {shortages.map(s => (
+                      <li key={s.type}>
+                        <b>{typeLabel(s.type)}</b>: precisa de {s.need}, disponível {s.have} (faltam {s.need - s.have})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
           </section>
         )}
 
@@ -827,7 +962,7 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Package size={16}/> {lab ? 'Equipamentos do laboratório' : 'Equipamentos a serem retirados do estoque'}
+                <Package size={16}/> {lab ? 'Equipamentos avulsos do laboratório' : 'Equipamentos avulsos (fora de kit)'}
               </h3>
               <button type="button" onClick={addEquip}
                 disabled={availableTypes.length === 0 && form.equipments.length === 0}
@@ -914,7 +1049,7 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
 
             <p className="mt-3 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               💡 {lab
-                ? 'Itens novos/aumentados são retirados do estoque automaticamente. Itens removidos/diminuídos voltam para o estoque (Almoxarifado SEMED).'
+                ? 'Itens novos/aumentados são retirados do estoque automaticamente. Itens removidos/diminuídos voltam para o estoque (Coordenação de tecnologia educacional).'
                 : 'Ao criar o laboratório, as quantidades serão retiradas automaticamente do seu estoque (lotes mais antigos primeiro).'}
             </p>
           </section>
@@ -991,7 +1126,7 @@ function DeactivateModal({ lab, onClose, onDone }) {
             ⚠️ Você vai desativar o laboratório <b>"{lab.name}"</b>
           </p>
           <p className="text-amber-700 dark:text-amber-300">
-            <b>{total} equipamento(s)</b> serão devolvidos ao estoque do Almoxarifado SEMED.
+            <b>{total} equipamento(s)</b> serão devolvidos ao estoque da Coordenação de tecnologia educacional.
           </p>
         </div>
         <div>

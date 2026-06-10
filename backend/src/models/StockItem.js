@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
  */
 const TYPES = [
   'computador',
-  'notebook',
+  //'notebook',
  // 'impressora',
   'roteador',
  // 'nobreak',
@@ -25,6 +25,13 @@ const TYPES = [
 const CONDITIONS = ['novo', 'usado', 'recondicionado'];
 
 /**
+ * Local padrão do estoque. Usado tanto no cadastro quanto no estorno
+ * (devolução de equipamentos de laboratório) para garantir que os lotes
+ * sejam mesclados no mesmo local e não dupliquem.
+ */
+const DEFAULT_LOCATION = 'Coordenação de tecnologia educacional';
+
+/**
  * Lote de estoque — N unidades de um mesmo tipo/condição/local.
  * `type` é livre (aceita tipos customizados além dos sugeridos).
  */
@@ -39,7 +46,7 @@ const stockItemSchema = new mongoose.Schema(
     },
     condition: { type: String, enum: CONDITIONS, default: 'novo', index: true },
     quantity: { type: Number, required: true, min: 0, default: 1 },
-    location: { type: String, default: 'Coordenação de tecnologia educacional', trim: true },
+    location: { type: String, default: DEFAULT_LOCATION, trim: true },
     notes: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
@@ -48,5 +55,9 @@ const stockItemSchema = new mongoose.Schema(
 
 stockItemSchema.statics.TYPES = TYPES;
 stockItemSchema.statics.CONDITIONS = CONDITIONS;
+stockItemSchema.statics.DEFAULT_LOCATION = DEFAULT_LOCATION;
 
-module.exports = mongoose.model('StockItem', stockItemSchema);
+const StockItem = mongoose.model('StockItem', stockItemSchema);
+StockItem.DEFAULT_LOCATION = DEFAULT_LOCATION;
+
+module.exports = StockItem;
