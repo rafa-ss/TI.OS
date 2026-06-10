@@ -29,8 +29,8 @@ function loadImage(filePath) {
 }
 
 const EQUIPMENT_LABEL = {
-  computador: 'Computadores',
-  notebook: 'Notebooks',
+  computador: 'Computadores (Placa-mãe DDR3, 8Gb, SSD240GB)',
+  // notebook: 'Notebooks',
   impressora: 'Impressoras',
   roteador: 'Roteadores',
   nobreak: 'Nobreaks',
@@ -41,7 +41,7 @@ const EQUIPMENT_LABEL = {
   monitor: 'Monitores',
   memoria_ram: 'Memórias RAM',
   fonte: 'Fontes',
-  caixa_cabo_rj45: 'Caixas de cabo RJ45',
+  //caixa_cabo_rj45: 'Caixas de cabo RJ45',
   outro: 'Outros',
 };
 
@@ -258,7 +258,7 @@ function buildPdf(labId) {
 
       // Assinaturas
       doc.moveDown(3);
-      const sigY = doc.y;
+      const sigY = doc.page.height - 180;
       doc.moveTo(70, sigY).lineTo(265, sigY).stroke();
       doc.moveTo(330, sigY).lineTo(525, sigY).stroke();
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a')
