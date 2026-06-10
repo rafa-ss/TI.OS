@@ -17,13 +17,15 @@ const populateRefs = [
 ];
 
 exports.list = asyncHandler(async (req, res) => {
-  const { q, status, school } = req.query;
+  const { q, status, school, kind } = req.query;
   const filter = {};
   if (q) filter.name = new RegExp(q, 'i');
   if (status) filter.status = status;
   if (school) filter.school = school;
+  if (kind) filter.kind = kind; // 'laboratorio' | 'administrativo'
 
-  const pagination = getPagination(req.query);
+  // Ordem alfabética por nome (padrão). Sobrescrevível via ?sort=&order=.
+  const pagination = getPagination({ sort: 'name', order: 'asc', ...req.query });
   const data = await paginate(Laboratory, filter, pagination, populateRefs);
   res.json({ success: true, ...data });
 });

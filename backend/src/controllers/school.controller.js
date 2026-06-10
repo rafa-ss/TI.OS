@@ -5,9 +5,16 @@ const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
 const importService = require('../services/import.service');
 
+/** Escapa caracteres especiais de regex para busca segura por texto livre. */
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 exports.list = asyncHandler(async (req, res) => {
-  const { q, situacao, municipio } = req.query;
+  const { q, situacao, municipio, inep, name, dependenciaAdm } = req.query;
   const filter = {};
+
+  // Busca global (mantida para compatibilidade)
   if (q) {
     filter.$or = [
       { name: new RegExp(q, 'i') },
@@ -15,10 +22,16 @@ exports.list = asyncHandler(async (req, res) => {
       { municipio: new RegExp(q, 'i') },
     ];
   }
-  if (situacao) filter.situacao = situacao;
-  if (municipio) filter.municipio = municipio;
 
-  const pagination = getPagination(req.query);
+  // Filtros por COLUNA (busca parcial, case-insensitive)
+  if (inep) filter.inep = new RegExp(escapeRegex(inep), 'i');
+  if (name) filter.name = new RegExp(escapeRegex(name), 'i');
+  if (municipio) filter.municipio = new RegExp(escapeRegex(municipio), 'i');
+  if (dependenciaAdm) filter.dependenciaAdm = new RegExp(escapeRegex(dependenciaAdm), 'i');
+  if (situacao) filter.situacao = situacao; // situação é seleção exata
+
+  // Ordem ALFABÉTICA por nome (padrão). Pode ser sobrescrito com ?sort=...&order=...
+  const pagination = getPagination({ sort: 'name', order: 'asc', ...req.query });
   const data = await paginate(School, filter, pagination);
   res.json({ success: true, ...data });
 });

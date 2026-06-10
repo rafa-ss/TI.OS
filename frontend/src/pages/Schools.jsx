@@ -20,7 +20,10 @@ export default function Schools() {
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ q: '', situacao: '', page: 1, limit: 15 });
+  const [filters, setFilters] = useState({
+    inep: '', name: '', municipio: '', situacao: '', dependenciaAdm: '',
+    page: 1, limit: 15,
+  });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -35,6 +38,8 @@ export default function Schools() {
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
+
+  const hasActiveFilter = !!(filters.inep || filters.name || filters.municipio || filters.situacao || filters.dependenciaAdm);
 
   async function remove(school) {
     if (!confirm(`Excluir a escola "${school.name}"?\n\nEsta ação não pode ser desfeita.`)) return;
@@ -58,9 +63,6 @@ export default function Schools() {
         </div>
         {isAdmin && (
           <div className="flex gap-2">
-            <button onClick={() => setImportOpen(true)} className="btn-secondary">
-              <Upload size={16}/> Importar Censo
-            </button>
             <button onClick={() => { setEditing(null); setOpen(true); }} className="btn-primary">
               <Plus size={16}/> Nova escola
             </button>
@@ -68,26 +70,63 @@ export default function Schools() {
         )}
       </div>
 
-      <div className="card p-4 grid md:grid-cols-3 gap-3">
-        <div className="relative md:col-span-2">
-          <Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
-          <input className="input pl-9" placeholder="Buscar por nome, INEP ou município..."
-            value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value, page: 1 }))}/>
+      {/* Barra de filtros por coluna */}
+      <div className="card p-4">
+        <div className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+          <Search size={16} className="text-slate-400"/> Filtrar por coluna
+          {hasActiveFilter && (
+            <button
+              onClick={() => setFilters(f => ({
+                ...f, inep: '', name: '', municipio: '', situacao: '', dependenciaAdm: '', page: 1,
+              }))}
+              className="ml-auto btn-ghost text-xs text-rose-500 px-2 py-1"
+            >
+              Limpar filtros
+            </button>
+          )}
         </div>
-        <select className="input" value={filters.situacao}
-          onChange={e => setFilters(f => ({ ...f, situacao: e.target.value, page: 1 }))}>
-          <option value="">Todas as situações</option>
-          {SITUACAO_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[10px] uppercase font-semibold text-slate-500">INEP</label>
+            <input className="input !py-1.5 font-mono" placeholder="Buscar INEP..."
+              value={filters.inep}
+              onChange={e => setFilters(f => ({ ...f, inep: e.target.value, page: 1 }))}/>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase font-semibold text-slate-500">Nome</label>
+            <input className="input !py-1.5" placeholder="Buscar nome..."
+              value={filters.name}
+              onChange={e => setFilters(f => ({ ...f, name: e.target.value, page: 1 }))}/>
+          </div>
+         
+          <div>
+            <label className="text-[10px] uppercase font-semibold text-slate-500">Situação</label>
+            <select className="input !py-1.5" value={filters.situacao}
+              onChange={e => setFilters(f => ({ ...f, situacao: e.target.value, page: 1 }))}>
+              <option value="">Todas</option>
+              {SITUACAO_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase font-semibold text-slate-500">Dependência</label>
+            <select className="input !py-1.5" value={filters.dependenciaAdm}
+              onChange={e => setFilters(f => ({ ...f, dependenciaAdm: e.target.value, page: 1 }))}>
+              <option value="">Todas</option>
+              {DEPENDENCIA_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
         {loading ? <TableSkeleton cols={6}/> : items.length === 0 ? (
           <EmptyState
             title="Nenhuma escola encontrada"
-            description={isAdmin
-              ? 'Clique em "Importar Censo" para carregar todas, ou "Nova escola" para cadastrar manualmente.'
-              : 'Solicite ao administrador para importar o Censo Escolar.'} />
+            description={hasActiveFilter
+              ? 'Nenhuma escola corresponde aos filtros. Tente limpar ou ajustar a busca.'
+              : (isAdmin
+                ? 'Clique em "Nova escola" para cadastrar.'
+                : 'Nenhuma escola cadastrada ainda.')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-modern">

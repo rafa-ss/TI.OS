@@ -31,8 +31,8 @@ export const PRIORITY_COLOR = {
 };
 
 export const EQUIPMENT_TYPE_LABEL = {
-  computador: 'Computador (Placa-mãe DDR3, 8Gb, SSD240GB)',
-  notebook: 'Notebook',
+  computador: 'Computador',
+notebook: 'Notebook',
   impressora: 'Impressora',
   roteador: 'Roteador',
   nobreak: 'Nobreak',

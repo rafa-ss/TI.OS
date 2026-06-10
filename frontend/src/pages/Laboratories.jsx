@@ -3,12 +3,11 @@ import {
   Plus, Search, Pencil, Trash2, FlaskConical, Package,
   CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer,
   Wifi, Battery, Tablet, HelpCircle, AlertTriangle, Mouse, Keyboard, Cpu, Cable, Zap, MemoryStick, Hash,
-  Building2, Briefcase, Boxes, Minus
+  Building2, Briefcase, Boxes, Minus, Wrench
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { TableSkeleton } from '../components/Loading';
-import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
 import SchoolCombobox from '../components/SchoolCombobox';
@@ -44,7 +43,7 @@ const KIND_COLOR = {
   administrativo: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 };
 const KIND_ICON = {
-  laboratorio: FlaskConical,
+  laboratorio: Monitor,
   administrativo: Briefcase,
 };
 
@@ -65,14 +64,58 @@ const TYPE_ICONS = {
   memoria_ram: MemoryStick, fonte: Cpu, outro: HelpCircle,
 };
 
+// Cores do indicador de status de cada computador no mini-mapa.
+const COMPUTER_DOT = {
+  active:      'bg-emerald-500',                 // Funcionando
+  maintenance: 'bg-amber-500',                   // Em manutenção
+  defective:   'bg-rose-500',                    // Defeito
+  empty:       'bg-slate-300 dark:bg-slate-700', // Vazio
+};
+
+/**
+ * Calcula o breakdown de status dos computadores de um laboratório.
+ * Total = nº de equipamentos do tipo "computador" no inventário.
+ * ativos = preenchido pelo lab; se nenhum status foi informado ainda,
+ * assume tudo "ativo" por padrão (lab recém-criado).
+ * Retorna também um array `cells` para desenhar o mini-mapa.
+ */
+export function computeComputerStatus(lab) {
+  const total = (lab.equipments || [])
+    .filter(e => String(e.type).toLowerCase().trim() === 'computador')
+    .reduce((a, e) => a + (e.quantity || 0), 0);
+
+  const cs = lab.computerStatus || {};
+  let maintenance = Math.max(0, Number(cs.maintenance) || 0);
+  let defective = Math.max(0, Number(cs.defective) || 0);
+  let active = Math.max(0, Number(cs.active) || 0);
+
+  const informed = active + maintenance + defective;
+  // Se nunca foi feita vistoria (nada informado) e há PCs, assume todos ativos.
+  if (informed === 0 && total > 0) active = total;
+
+  // Garante coerência: não passar do total
+  const used = Math.min(active + maintenance + defective, total);
+  const empty = Math.max(0, total - used);
+
+  const cells = [
+    ...Array(Math.min(active, total)).fill('active'),
+    ...Array(maintenance).fill('maintenance'),
+    ...Array(defective).fill('defective'),
+    ...Array(empty).fill('empty'),
+  ].slice(0, total);
+
+  return { total, active, maintenance, defective, empty, cells };
+}
+
 export default function Laboratories() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole('admin');
+  const canInspect = hasRole('admin', 'tecnico');
 
-  const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
+  const [labItems, setLabItems] = useState([]);        // Laboratórios de informática
+  const [adminItems, setAdminItems] = useState([]);    // Setores administrativos
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ q: '', status: '', page: 1, limit: 10 });
+  const [filters, setFilters] = useState({ q: '', status: '' });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -83,13 +126,14 @@ export default function Laboratories() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ''));
-      const [list, sum] = await Promise.all([
-        api.get('/laboratories', { params }),
+      const base = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ''));
+      const [labs, admins, sum] = await Promise.all([
+        api.get('/laboratories', { params: { ...base, kind: 'laboratorio', limit: 200 } }),
+        api.get('/laboratories', { params: { ...base, kind: 'administrativo', limit: 200 } }),
         api.get('/laboratories/summary'),
       ]);
-      setItems(list.data.items);
-      setPagination(list.data.pagination);
+      setLabItems(labs.data.items);
+      setAdminItems(admins.data.items);
       setSummary(sum.data.data);
     } finally { setLoading(false); }
   }, [filters]);
@@ -151,7 +195,7 @@ export default function Laboratories() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <FlaskConical className="text-brand-600" size={26}/>
+            <Monitor className="text-brand-600" size={26}/>
             Laboratórios e Setores Administrativos
           </h1>
           <p className="text-sm text-slate-500">
@@ -166,8 +210,8 @@ export default function Laboratories() {
       {/* Cards de resumo */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total" value={summary.total} color="brand" icon={FlaskConical}
-            onClick={() => setFilters({ q: '', status: '', page: 1, limit: 10 })}/>
+          <StatCard label="Total" value={summary.total} color="brand" icon={Monitor}
+            onClick={() => setFilters({ q: '', status: '' })}/>
           <StatCard label="Concluídos" value={summary.concluidos} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, status: 'concluido', page: 1 }))}/>
           <StatCard label="Em montagem" value={countByStatus('em_montagem')} color="amber" icon={Hammer}
@@ -180,123 +224,72 @@ export default function Laboratories() {
       <div className="card p-4 grid md:grid-cols-3 gap-3">
         <div className="relative md:col-span-2">
           <Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
-          <input className="input pl-9" placeholder="Buscar laboratório..."
-            value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value, page: 1 }))}/>
+          <input className="input pl-9" placeholder="Buscar por nome..."
+            value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}/>
         </div>
         <select className="input" value={filters.status}
-          onChange={e => setFilters(f => ({ ...f, status: e.target.value, page: 1 }))}>
+          onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
           <option value="">Todos os status</option>
           {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
 
-      {/* Tabela */}
-      <div className="card overflow-hidden">
-        {loading ? <TableSkeleton cols={6}/> : items.length === 0 ? (
-          <EmptyState title="Nenhum laboratório cadastrado"
-            description="Clique em 'Novo laboratório' para começar."/>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="table-modern">
-              <thead><tr>
-                <th className="w-[90px] text-center">Nº Termo</th>
-                <th>Escola</th>
-                <th className="w-[140px]">Tipo</th>
-                <th className="w-[120px]">Status</th>
-                <th>Responsáveis</th>
-                <th className="w-[110px] text-center">Data</th>
-                <th className="w-[60px] text-right pr-2">Ações</th>
-              </tr></thead>
-              <tbody>
-                {items.map(lab => {
-                  const kind = lab.kind || 'laboratorio';
-                  const KindIcon = KIND_ICON[kind] || FlaskConical;
-                  return (
-                    <tr key={lab._id}
-                      onClick={() => setDetailing(lab)}
-                      className="align-middle cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      {/* Nº Termo */}
-                      <td className="text-center">
-                        {lab.deliveryTermNumber ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                            <Hash size={10}/>{lab.deliveryTermNumber}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">não emitido</span>
-                        )}
-                      </td>
-                      {/* Escola */}
-                      <td className="text-sm">
-                        <div className="flex items-center gap-2">
-                          <KindIcon size={16} className="text-brand-600 shrink-0"/>
-                          <span className="font-medium truncate max-w-[260px]" title={lab.school?.name || ''}>
-                            {lab.school?.name || '-'}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 ml-6">{lab.name}</span>
-                      </td>
-                      {/* Tipo */}
-                      <td>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${KIND_COLOR[kind]}`}>
-                          <KindIcon size={11}/>{KIND_SHORT[kind]}
-                        </span>
-                      </td>
-                      {/* Status */}
-                      <td>
-                        <span className={`badge ${STATUS_COLOR[lab.status]}`}>{STATUS_LABEL[lab.status]}</span>
-                      </td>
-                      {/* Responsáveis */}
-                      <td className="text-sm">
-                        {(lab.responsibles && lab.responsibles.length > 0) ? (
-                          <div className="flex flex-wrap gap-1">
-                            {lab.responsibles.map(r => {
-                              const cls = r.role === 'admin'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                                : r.role === 'atendente'
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
-                              const icon = r.role === 'admin' ? '👤' : r.role === 'atendente' ? '☎️' : '🔧';
-                              return (
-                                <span key={r._id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs ${cls}`}>
-                                  {icon} {r.name}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        ) : lab.responsibleTech?.name ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                            🔧 {lab.responsibleTech.name}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 italic text-xs">sem responsáveis</span>
-                        )}
-                      </td>
-                      {/* Data */}
-                      <td className="text-xs text-center text-slate-600 dark:text-slate-300">
-                        {lab.assemblyDate ? formatDate(lab.assemblyDate).split(' ')[0] : '-'}
-                      </td>
-                      {/* Ações (apenas Excluir; demais ficam no modal de detalhes) */}
-                      <td className="text-right pr-2" onClick={e => e.stopPropagation()}>
-                        {isAdmin ? (
-                          <button onClick={() => remove(lab)}
-                            className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30"
-                            title="Excluir laboratório">
-                            <Trash2 size={16}/>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <Pagination page={pagination.page} totalPages={pagination.totalPages}
-          onChange={p => setFilters(f => ({ ...f, page: p }))}/>
-      </div>
+      {/* === DOIS CONTAINERS: 70% mapa de laboratórios | 30% lista de administrativos === */}
+      {loading ? (
+        <TableSkeleton cols={4}/>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+          {/* --- 70%: Laboratórios de Informática (MAPA VISUAL) --- */}
+          <section className="lg:col-span-7 card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Monitor size={18} className="text-indigo-600"/>
+                Laboratórios de Informática
+                <span className="text-xs font-normal text-slate-400">({labItems.length})</span>
+              </h2>
+            </div>
+
+            {labItems.length === 0 ? (
+              <EmptyState title="Nenhum laboratório"
+                description="Cadastre um Laboratório de Informática para vê-lo no mapa."/>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {labItems.map(lab => (
+                  <LabMapCard key={lab._id} lab={lab}
+                    isAdmin={isAdmin}
+                    onOpen={() => setDetailing(lab)}
+                    onRemove={() => remove(lab)}/>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* --- 30%: Setores Administrativos (LISTA COMPACTA) --- */}
+          <section className="lg:col-span-3 card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Briefcase size={18} className="text-sky-600"/>
+                Administrativos
+                <span className="text-xs font-normal text-slate-400">({adminItems.length})</span>
+              </h2>
+            </div>
+
+            {adminItems.length === 0 ? (
+              <EmptyState title="Nenhum setor"
+                description="Cadastre um Setor Administrativo."/>
+            ) : (
+              <div className="space-y-2">
+                {adminItems.map(lab => (
+                  <AdminListItem key={lab._id} lab={lab}
+                    isAdmin={isAdmin}
+                    onOpen={() => setDetailing(lab)}
+                    onRemove={() => remove(lab)}/>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       <LabForm open={open} onClose={() => setOpen(false)} lab={editing} isAdmin={isAdmin}
         onSaved={() => { setOpen(false); load(); }}/>
@@ -306,10 +299,158 @@ export default function Laboratories() {
         lab={detailing}
         onClose={() => setDetailing(null)}
         isAdmin={isAdmin}
+        canInspect={canInspect}
         onPrint={printTerm}
         onEdit={(lab) => { setDetailing(null); setEditing(lab); setOpen(true); }}
         onDeactivate={(lab) => { setDetailing(null); setDeactivating(lab); }}
+        onInspected={async () => {
+          // Recarrega a lista e atualiza o lab aberto no modal com os dados novos
+          try {
+            const { data } = await api.get(`/laboratories/${detailing._id}`);
+            setDetailing(data.laboratory);
+          } catch {}
+          load();
+        }}
       />
+    </div>
+  );
+}
+
+// =============================================================
+// Card visual do "mapa" de Laboratórios (container 70%)
+// =============================================================
+function LabMapCard({ lab, isAdmin, onOpen, onRemove }) {
+  const { total, active, maintenance, defective, cells } = computeComputerStatus(lab);
+
+  // Define o nº de colunas do mini-mapa conforme a quantidade (mantém quadradinho)
+  const cols = total <= 4 ? 4 : total <= 9 ? 5 : total <= 16 ? 6 : total <= 25 ? 7 : 8;
+
+  return (
+    <div onClick={onOpen}
+      className="group relative flex flex-col text-left rounded-2xl border border-slate-200 dark:border-slate-700
+                 bg-white dark:bg-slate-900 shadow-sm hover:shadow-xl hover:-translate-y-1
+                 transition-all duration-200 cursor-pointer overflow-hidden">
+      {/* Cabeçalho: nome + escola */}
+      <div className="p-4 pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Monitor size={16} className="text-indigo-600 shrink-0"/>
+              <h3 className="font-bold text-slate-900 dark:text-white truncate">{lab.name}</h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5" title={lab.school?.name || ''}>
+              {lab.school?.name || '—'}
+            </p>
+          </div>
+          {lab.deliveryTermNumber && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shrink-0">
+              <Hash size={9}/>{lab.deliveryTermNumber}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Mini-mapa visual dos computadores */}
+      <div className="px-4">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3">
+          {total === 0 ? (
+            <p className="text-[11px] text-slate-400 text-center py-3">Nenhum computador cadastrado</p>
+          ) : (
+            <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+              {cells.map((s, i) => (
+                <div key={i}
+                  title={
+                    s === 'active' ? 'Funcionando'
+                    : s === 'maintenance' ? 'Em manutenção'
+                    : s === 'defective' ? 'Defeito' : 'Vazio'
+                  }
+                  className={`aspect-square rounded-md ${COMPUTER_DOT[s]} ${
+                    s === 'empty' ? '' : 'shadow-sm'
+                  } transition-transform group-hover:scale-[1.03]`}/>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Contadores */}
+      <div className="grid grid-cols-4 gap-1 px-4 py-3 text-center">
+        <Counter label="Total" value={total} className="text-slate-700 dark:text-slate-200"/>
+        <Counter label="Ativos" value={active} dot="bg-emerald-500" className="text-emerald-600"/>
+        <Counter label="Manut." value={maintenance} dot="bg-amber-500" className="text-amber-600"/>
+        <Counter label="Defeito" value={defective} dot="bg-rose-500" className="text-rose-600"/>
+      </div>
+
+      {/* Rodapé: última vistoria */}
+      <div className="mt-auto px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <Calendar size={12}/>
+          {lab.lastInspectionAt
+            ? `Vistoria: ${formatDate(lab.lastInspectionAt).split(' ')[0]}`
+            : 'Sem vistoria'}
+        </span>
+        <span className={`badge ${STATUS_COLOR[lab.status || 'planejado']}`}>
+          {STATUS_LABEL[lab.status || 'planejado']}
+        </span>
+      </div>
+
+      {isAdmin && (
+        <span
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity btn-ghost p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded"
+          title="Excluir">
+          <Trash2 size={14}/>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Mini componente de contador usado no rodapé do card
+function Counter({ label, value, dot, className = '' }) {
+  return (
+    <div>
+      <div className={`flex items-center justify-center gap-1 text-lg font-bold ${className}`}>
+        {dot && <span className={`w-2 h-2 rounded-full ${dot}`}/>}
+        {value}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+    </div>
+  );
+}
+
+// =============================================================
+// Item de lista compacta de Setores Administrativos (container 30%)
+// =============================================================
+function AdminListItem({ lab, isAdmin, onOpen, onRemove }) {
+  const status = lab.status || 'planejado';
+  const dot = {
+    planejado: 'bg-slate-400',
+    em_montagem: 'bg-amber-500',
+    concluido: 'bg-emerald-500',
+    manutencao: 'bg-violet-500',
+    desativado: 'bg-rose-500',
+  }[status] || 'bg-slate-400';
+
+  return (
+    <div onClick={onOpen}
+      className="group flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 cursor-pointer transition-colors">
+      <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} title={STATUS_LABEL[status]}/>
+      <Briefcase size={14} className="text-sky-600 shrink-0"/>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{lab.name}</p>
+        <p className="text-[10px] text-slate-500 truncate" title={lab.school?.name || ''}>{lab.school?.name || '—'}</p>
+      </div>
+      {lab.deliveryTermNumber && (
+        <span className="text-[9px] font-mono text-slate-400 shrink-0">{lab.deliveryTermNumber}</span>
+      )}
+      {isAdmin && (
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost p-1 text-rose-500 shrink-0"
+          title="Excluir">
+          <Trash2 size={13}/>
+        </button>
+      )}
     </div>
   );
 }
@@ -318,12 +459,18 @@ export default function Laboratories() {
 // Modal de Detalhes do Laboratório/Setor — visualização completa
 // (estilo "termo": tudo bonito, organizado em seções, com ações no rodapé)
 // =============================================================
-function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }) {
+function LabDetailModal({ lab, onClose, isAdmin, canInspect, onPrint, onEdit, onDeactivate, onInspected }) {
+  const [showInspect, setShowInspect] = useState(false);
+  // Reseta o painel de vistoria sempre que troca de laboratório
+  useEffect(() => { setShowInspect(false); }, [lab?._id]);
+
   if (!lab) return null;
   const kind = lab.kind || 'laboratorio';
   const KindIcon = KIND_ICON[kind] || FlaskConical;
   const totalEq = (lab.equipments || []).reduce((a, e) => a + e.quantity, 0);
   const active = !lab.returnedToStock && lab.status !== 'desativado';
+  const isLab = kind === 'laboratorio';
+  const cstat = computeComputerStatus(lab);
 
   // Cabeçalho colorido do modal
   const headerColor = kind === 'administrativo' ? 'from-sky-500 to-sky-600' : 'from-indigo-500 to-indigo-600';
@@ -343,6 +490,12 @@ function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }
               className="btn-primary !bg-indigo-600 hover:!bg-indigo-700">
               <Printer size={16}/> Imprimir Termo
             </button>
+            {isLab && canInspect && active && (
+              <button onClick={() => setShowInspect(v => !v)}
+                className="btn-secondary !text-emerald-700 !border-emerald-300 hover:!bg-emerald-50 dark:!text-emerald-300 dark:!border-emerald-800 dark:hover:!bg-emerald-900/30">
+                <Wrench size={16}/> {showInspect ? 'Fechar manutenção' : 'Registrar Manutenção'}
+              </button>
+            )}
             <button onClick={() => onEdit(lab)} className="btn-secondary">
               <Pencil size={16}/> Editar
             </button>
@@ -375,6 +528,52 @@ function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }
             </div>
           </div>
         </div>
+
+        {/* Mini-mapa dos computadores + status (somente laboratórios) */}
+        {isLab && (
+          <section className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <Monitor size={14}/> Mapa dos computadores
+              </h4>
+              <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                <Calendar size={12}/>
+                {lab.lastInspectionAt
+                  ? `Última vistoria: ${formatDate(lab.lastInspectionAt)}`
+                  : 'Sem vistoria registrada'}
+              </span>
+            </div>
+
+            {cstat.total === 0 ? (
+              <p className="text-sm text-slate-400 italic">Nenhum computador cadastrado neste laboratório.</p>
+            ) : (
+              <>
+                <div className="grid gap-1.5 mb-3"
+                  style={{ gridTemplateColumns: `repeat(${cstat.total <= 16 ? 8 : 10}, minmax(0, 1fr))` }}>
+                  {cstat.cells.map((s, i) => (
+                    <div key={i}
+                      title={s === 'active' ? 'Funcionando' : s === 'maintenance' ? 'Em manutenção' : s === 'defective' ? 'Defeito' : 'Vazio'}
+                      className={`aspect-square rounded-md ${COMPUTER_DOT[s]} ${s === 'empty' ? '' : 'shadow-sm'}`}/>
+                  ))}
+                </div>
+                {/* Legenda */}
+                <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+                  <Legend dot="bg-emerald-500" label={`Funcionando (${cstat.active})`}/>
+                  <Legend dot="bg-amber-500" label={`Manutenção (${cstat.maintenance})`}/>
+                  <Legend dot="bg-rose-500" label={`Defeito (${cstat.defective})`}/>
+                  <Legend dot="bg-slate-300 dark:bg-slate-700" label={`Vazio (${cstat.empty})`}/>
+                </div>
+              </>
+            )}
+
+            {/* Painel de registro de manutenção/vistoria */}
+            {showInspect && (
+              <InspectPanel lab={lab} cstat={cstat}
+                onClose={() => setShowInspect(false)}
+                onSaved={() => { setShowInspect(false); onInspected?.(); }}/>
+            )}
+          </section>
+        )}
 
         {/* Grade de informações principais */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -514,6 +713,108 @@ function LabDetailModal({ lab, onClose, isAdmin, onPrint, onEdit, onDeactivate }
         </div>
       </div>
     </Modal>
+  );
+}
+
+// Legenda colorida do mini-mapa
+function Legend({ dot, label }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`w-2.5 h-2.5 rounded ${dot}`}/> {label}
+    </span>
+  );
+}
+
+// =============================================================
+// Painel de registro de Manutenção / Vistoria (dentro do modal de detalhes)
+// =============================================================
+function InspectPanel({ lab, cstat, onClose, onSaved }) {
+  const [active, setActive] = useState(cstat.active);
+  const [maintenance, setMaintenance] = useState(cstat.maintenance);
+  const [defective, setDefective] = useState(cstat.defective);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const total = cstat.total;
+  const soma = (Number(active) || 0) + (Number(maintenance) || 0) + (Number(defective) || 0);
+  const empty = Math.max(0, total - soma);
+  const invalid = soma > total;
+
+  async function save() {
+    if (invalid) return toast.error(`A soma (${soma}) não pode passar do total de computadores (${total}).`);
+    setSaving(true);
+    try {
+      await api.post(`/laboratories/${lab._id}/inspect`, {
+        active: Number(active) || 0,
+        maintenance: Number(maintenance) || 0,
+        defective: Number(defective) || 0,
+        note,
+      });
+      toast.success('Manutenção/vistoria registrada');
+      onSaved?.();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Erro ao registrar vistoria');
+    } finally { setSaving(false); }
+  }
+
+  const numInput = (val, setter, accent) => (
+    <input type="number" min="0" max={total} value={val}
+      onChange={e => setter(Math.max(0, Number(e.target.value) || 0))}
+      className={`input !py-1.5 text-center font-bold ${accent}`}/>
+  );
+
+  return (
+    <div className="mt-4 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10">
+      <div className="flex items-center justify-between mb-2">
+        <h5 className="font-semibold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1">
+          <Wrench size={15} className="text-emerald-600"/> Registrar manutenção / vistoria
+        </h5>
+        <span className="text-[11px] text-slate-500">Total de computadores: <b>{total}</b></span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-emerald-600 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"/> Funcionando
+          </label>
+          {numInput(active, setActive, 'border-emerald-300 dark:border-emerald-800')}
+        </div>
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-amber-600 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-500"/> Manutenção
+          </label>
+          {numInput(maintenance, setMaintenance, 'border-amber-300 dark:border-amber-800')}
+        </div>
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-rose-600 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-rose-500"/> Defeito
+          </label>
+          {numInput(defective, setDefective, 'border-rose-300 dark:border-rose-800')}
+        </div>
+      </div>
+
+      <div className="mt-2 text-[11px] flex items-center justify-between">
+        <span className={invalid ? 'text-rose-600 font-semibold' : 'text-slate-500'}>
+          {invalid
+            ? `⚠️ Soma (${soma}) maior que o total (${total})`
+            : `Vazios/disponíveis: ${empty}`}
+        </span>
+      </div>
+
+      <div className="mt-2">
+        <label className="text-[10px] uppercase font-semibold text-slate-500">Observação (opcional)</label>
+        <input className="input !py-1.5" placeholder="Ex.: PC 3 com fonte queimada, aguardando peça"
+          value={note} onChange={e => setNote(e.target.value)}/>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-3">
+        <button onClick={onClose} className="btn-ghost text-sm">Cancelar</button>
+        <button onClick={save} disabled={saving || invalid}
+          className="btn-primary !bg-emerald-600 hover:!bg-emerald-700 text-sm">
+          {saving ? 'Salvando...' : 'Salvar vistoria'}
+        </button>
+      </div>
+    </div>
   );
 }
 
