@@ -82,7 +82,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-300 font-semibold flex items-center gap-1.5">
-              <ShieldCheck size={14}/> Coordenação de Tecnologia Educacional
+              <ShieldCheck size={14}/> Centro de Operações · Tecnologia Educacional
             </p>
             <h1 className="text-2xl font-bold mt-1">{greeting()}, {firstName} 👋</h1>
             <p className="text-sm text-slate-300 mt-0.5">
@@ -182,10 +182,6 @@ export default function Dashboard() {
 
       {/* ===== Linha 2: Últimas O.S. (80%) + Mensagens (20%) — mesma altura fixa ===== */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        {/* Mensagens recentes (chat da equipe) — 20% */}
-        <div className="noc-fixed">
-          <RecentMessagesCard />
-        </div>
         {/* Últimas Ordens de Serviço — 80% */}
         <div className="xl:col-span-4">
           <Panel title="Últimas Ordens de Serviço" icon={ClipboardList} to="/ordens"
@@ -223,6 +219,11 @@ export default function Dashboard() {
               </div>
             )}
           </Panel>
+        </div>
+
+        {/* Mensagens recentes (chat da equipe) — 20% */}
+        <div className="noc-fixed">
+          <RecentMessagesCard />
         </div>
       </div>
 
