@@ -7,8 +7,7 @@ import api from '../services/api';
 import { TableSkeleton } from '../components/Loading';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
-import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { formatDate, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR } from '../utils/format';
+import { formatDate, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR, STATUS_LABEL, PRIORITY_LABEL, STATUS_ROW_COLOR } from '../utils/format';
 import OrderFormModal from './OrderFormModal';
 import MigrateOrderModal from './MigrateOrderModal';
 
@@ -270,12 +269,12 @@ export default function Orders() {
                   <th>Nº</th>
                   <th>Solicitante</th>
                   <th>Escola</th>
-                  <th>Equipamento</th>
-                  <th>Local</th>
-                  <th>Técnico</th>
-                  <th>Prioridade</th>
-                  <th>Status</th>
-                  <th>Abertura</th>
+                  <th className="text-center">Equipamento</th>
+                  <th className="text-center">Local</th>
+                  <th className="text-center">Técnico</th>
+                  <th className="text-center">Prioridade</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-center">Abertura</th>
                   <th></th>
                 </tr>
               </thead>
@@ -284,7 +283,9 @@ export default function Orders() {
                   <tr
                     key={o._id}
                     onClick={() => navigate(`/ordens/${o._id}`)}
-                    className="cursor-pointer hover:bg-brand-50/60 dark:hover:bg-brand-900/10 transition-colors"
+                    className={`cursor-pointer transition-colors ${
+                      STATUS_ROW_COLOR[o.status] || 'hover:bg-brand-50/60 dark:hover:bg-brand-900/10'
+                    }`}
                     title="Clique para abrir a O.S."
                   >
                     <td>
@@ -292,21 +293,29 @@ export default function Orders() {
                     </td>
                     <td>{o.requesterName}</td>
                     <td className="max-w-[180px] truncate">{o.school?.name || '-'}</td>
-                    <td>
+                    <td className="text-center">
                       <div className="text-sm">{o.equipmentType || '-'}</div>
-                      <div className="text-xs text-slate-500">{o.patrimonio || '—'}</div>
+                      {o.patrimonio && <div className="text-xs text-slate-500">{o.patrimonio}</div>}
                     </td>
-                    <td>
+                    <td className="text-center">
                       {o.serviceLocation && (
                         <span className={`badge ${SERVICE_LOCATION_COLOR[o.serviceLocation] || ''}`}>
                           {o.serviceLocation === 'ctec' ? '🏢' : '🚗'} {SERVICE_LOCATION_LABEL[o.serviceLocation]}
                         </span>
                       )}
                     </td>
-                    <td>{o.technician?.name || <span className="text-slate-400 italic text-xs">não atribuído</span>}</td>
-                    <td><PriorityBadge priority={o.priority} /></td>
-                    <td><StatusBadge status={o.status} /></td>
-                    <td className="text-xs">{formatDate(o.openedAt)}</td>
+                    <td className="text-center">{o.technician?.name || <span className="text-slate-400 italic text-xs">não atribuído</span>}</td>
+                    <td className="text-center">
+                      {o.priority === 'urgente' ? (
+                        <span className="font-bold text-rose-600 dark:text-rose-400">
+                          {PRIORITY_LABEL[o.priority] || o.priority}
+                        </span>
+                      ) : (
+                        <span>{PRIORITY_LABEL[o.priority] || o.priority}</span>
+                      )}
+                    </td>
+                    <td className="text-center">{STATUS_LABEL[o.status] || o.status}</td>
+                    <td className="text-center text-xs">{formatDate(o.openedAt)}</td>
                     <td>
                       <div className="flex items-center justify-end gap-0.5">
                         {canStart(o) && (

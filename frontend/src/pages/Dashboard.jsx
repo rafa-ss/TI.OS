@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   FlaskConical, XCircle, CalendarClock, Eye, Package, PackageMinus,
   ClipboardList, Clock, Activity, CheckCircle2, AlertTriangle, Bell, ArrowUpRight,
   Boxes, Monitor, ChevronRight, Loader2, ShieldCheck, RefreshCw, Layers, AlertCircle,
 } from 'lucide-react';
 import api from '../services/api';
-import { formatDate, SERVICE_TYPE_LABEL, typeLabel } from '../utils/format';
+import { formatDate, typeLabel, STATUS_LABEL, STATUS_ROW_COLOR } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import RecentMessagesCard from '../components/RecentMessagesCard';
 
@@ -43,6 +43,7 @@ function greeting() {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [d, setD] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -210,23 +211,29 @@ export default function Dashboard() {
                     <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800">
                       <th className="py-2 px-2">Nº</th>
                       <th className="py-2 px-2">Escola / Lab</th>
-                      <th className="py-2 px-2 hidden sm:table-cell">Tipo</th>
-                      <th className="py-2 px-2">Status</th>
-                      <th className="py-2 px-2 hidden md:table-cell">Abertura</th>
+                      <th className="py-2 px-2 hidden sm:table-cell text-center">Equipamento</th>
+                      <th className="py-2 px-2 text-center">Status</th>
+                      <th className="py-2 px-2 hidden md:table-cell text-center">Abertura</th>
                     </tr>
                   </thead>
                   <tbody>
                     {os.ultimas.map(o => (
-                      <tr key={o._id} className="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                      <tr key={o._id}
+                        onClick={() => navigate(`/ordens/${o._id}`)}
+                        title="Clique para abrir a O.S."
+                        className={`cursor-pointer border-b border-slate-50 dark:border-slate-800/60 transition ${STATUS_ROW_COLOR[o.status] || 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
                         <td className="py-2 px-2">
-                          <Link to={`/ordens/${o._id}`} className="font-mono font-bold text-brand-600 hover:underline">{o.number}</Link>
+                          <span className="font-mono font-bold text-brand-600">{o.number}</span>
                         </td>
                         <td className="py-2 px-2 min-w-0">
                           <p className="truncate max-w-[220px]">{o.laboratory?.name || o.school?.name || '—'}</p>
                         </td>
-                        <td className="py-2 px-2 hidden sm:table-cell text-slate-500">{SERVICE_TYPE_LABEL[o.serviceType] || o.serviceType}</td>
-                        <td className="py-2 px-2"><OsStatus status={o.status}/></td>
-                        <td className="py-2 px-2 hidden md:table-cell text-slate-400 text-xs">{formatDate(o.openedAt).split(' ')[0]}</td>
+                        <td className="py-2 px-2 hidden sm:table-cell text-center">
+                          <div className="text-sm">{o.equipmentType || '-'}</div>
+                          {o.patrimonio && <div className="text-xs text-slate-500">{o.patrimonio}</div>}
+                        </td>
+                        <td className="py-2 px-2 text-center">{STATUS_LABEL[o.status] || o.status}</td>
+                        <td className="py-2 px-2 hidden md:table-cell text-slate-400 text-xs text-center">{formatDate(o.openedAt).split(' ')[0]}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -391,15 +398,3 @@ function Empty({ icon: Icon, text }) {
   );
 }
 
-function OsStatus({ status }) {
-  const map = {
-    aberta: ['Aberta', 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'],
-    em_andamento: ['Andamento', 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'],
-    aguardando_peca: ['Aguard. peça', 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'],
-    finalizada: ['Finalizada', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'],
-    entregue: ['Entregue', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'],
-    cancelada: ['Cancelada', 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'],
-  };
-  const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-600'];
-  return <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${cls}`}>{label}</span>;
-}

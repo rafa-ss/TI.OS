@@ -258,7 +258,7 @@ export default function Laboratories() {
       <div className="card p-4 grid md:grid-cols-3 gap-3">
         <div className="relative md:col-span-2">
           <Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
-          <input className="input pl-9" placeholder="Buscar por nome..."
+          <input className="input pl-9" placeholder="Buscar por nome, escola ou INEP..."
             value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}/>
         </div>
         <select className="input" value={filters.status}
@@ -967,16 +967,14 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
       .then(r => setKitsAvailable(r.data.items || []))
       .catch(() => {});
 
-    // Carrega técnicos + admins + atendentes
-    Promise.all([
-      api.get('/users', { params: { role: 'tecnico',   limit: 100, active: true } }),
-      api.get('/users', { params: { role: 'admin',     limit: 100, active: true } }),
-      api.get('/users', { params: { role: 'atendente', limit: 100, active: true } }),
-    ]).then(([t, a, at]) => {
-      const list = [...t.data.items, ...a.data.items, ...at.data.items];
-      const map = new Map(list.map(u => [u._id, u]));
-      setStaff([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
-    }).catch(() => {});
+    // Carrega a equipe (técnicos + admins + atendentes ativos).
+    // Usa /users/staff, acessível a admin E técnico (não exige perfil admin).
+    api.get('/users/staff')
+      .then(r => {
+        const list = r.data.items || [];
+        setStaff([...list].sort((a, b) => a.name.localeCompare(b.name)));
+      })
+      .catch(() => {});
 
     // Estoque: pega summary (já tem byType com totais)
     api.get('/stock/summary')

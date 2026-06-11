@@ -16,6 +16,25 @@ exports.list = asyncHandler(async (req, res) => {
   res.json({ success: true, ...data });
 });
 
+/**
+ * Lista enxuta da equipe (técnicos + admins ativos) para seleção em formulários
+ * — ex.: responsáveis pela montagem de laboratório, técnicos auxiliares de OS.
+ * Acessível a admin e técnico (NÃO expõe a gestão completa de usuários).
+ * Retorna apenas campos públicos: _id, name, role, email.
+ */
+exports.staff = asyncHandler(async (req, res) => {
+  const { role } = req.query;
+  const filter = { active: true, role: { $in: ['admin', 'tecnico', 'atendente'] } };
+  if (role && ['admin', 'tecnico', 'atendente'].includes(role)) filter.role = role;
+
+  const items = await User.find(filter)
+    .select('name role email')
+    .sort({ name: 1 })
+    .lean();
+
+  res.json({ success: true, items });
+});
+
 exports.get = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new AppError('Usuário não encontrado', 404);

@@ -13,6 +13,9 @@ router.post('/me/avatar', upload.single('file'), ctrl.uploadMyAvatar);
 router.delete('/me/avatar', ctrl.removeMyAvatar);
 router.put('/me/password', ctrl.changeMyPassword);
 
+// === Lista enxuta da equipe (admin + técnico) — para seleção em formulários ===
+router.get('/staff', authorize('admin', 'tecnico'), ctrl.staff);
+
 // === Gestão de usuários (admin) ===
 router.get('/', authorize('admin'), ctrl.list);
 router.get('/:id', authorize('admin'), ctrl.get);

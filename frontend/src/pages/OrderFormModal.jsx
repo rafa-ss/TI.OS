@@ -50,17 +50,14 @@ export default function OrderFormModal({ open, onClose, order, onSaved, prefill 
 
   useEffect(() => {
     if (!open) return;
-    // Carrega técnicos e admins (só usado pra exibir o seletor pra admin)
-    if (isAdmin) {
-      Promise.all([
-        api.get('/users', { params: { role: 'tecnico', limit: 100 } }),
-        api.get('/users', { params: { role: 'admin', limit: 100 } }),
-      ]).then(([t, a]) => {
-        const list = [...(t.data.items || []), ...(a.data.items || [])];
-        const map = new Map(list.map(u => [u._id, u]));
-        setStaff([...map.values()].sort((x, y) => x.name.localeCompare(y.name)));
-      }).catch(() => {});
-    }
+    // Carrega a equipe (técnicos + admins) para o seletor de técnicos.
+    // Usa /users/staff, acessível a admin E técnico.
+    api.get('/users/staff')
+      .then(r => {
+        const list = (r.data.items || []).filter(u => ['admin', 'tecnico'].includes(u.role));
+        setStaff([...list].sort((x, y) => x.name.localeCompare(y.name)));
+      })
+      .catch(() => {});
     if (order) {
       setForm({
         requesterName: order.requesterName || '',

@@ -30,6 +30,18 @@ export const PRIORITY_COLOR = {
   urgente: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
 };
 
+// Cor de FUNDO da linha inteira na tabela de O.S., conforme o status.
+// Finalizada e entregue ficam sem cor (string vazia). Tons suaves para não
+// poluir, mas mantendo o hover destacável.
+export const STATUS_ROW_COLOR = {
+  aberta: 'bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/45',
+  em_andamento: 'bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/45',
+  aguardando_peca: 'bg-violet-100 dark:bg-violet-900/30 hover:bg-violet-200 dark:hover:bg-violet-900/45',
+  finalizada: 'bg-sky-100 dark:bg-sky-900/30 hover:bg-sky-200 dark:hover:bg-sky-900/45',
+  entregue: '',
+  cancelada: 'bg-rose-100 dark:bg-rose-900/30 hover:bg-rose-200 dark:hover:bg-rose-900/45',
+};
+
 export const EQUIPMENT_TYPE_LABEL = {
   computador: 'Computador ',
   notebook: 'Notebook',

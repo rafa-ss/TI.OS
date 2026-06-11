@@ -163,7 +163,10 @@ export default function LaboratoryDetail() {
         <Indicator label="Equipamentos" value={totalEquip} icon={Package} color="text-indigo-600"/>
         <Indicator label="Próx. preventiva"
           value={lab.nextPreventiveAt ? formatDate(lab.nextPreventiveAt).split(' ')[0] : '—'}
-          icon={Calendar} color="text-sky-600" small/>
+          icon={Calendar}
+          color={lab.preventiveOverdue ? 'text-rose-600' : (lab.preventiveDue ? 'text-amber-600' : 'text-sky-600')}
+          dot={lab.preventiveOverdue ? 'bg-rose-500' : (lab.preventiveDue ? 'bg-amber-500' : undefined)}
+          small/>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">

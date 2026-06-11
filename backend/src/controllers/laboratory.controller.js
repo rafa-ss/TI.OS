@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const Laboratory = require('../models/Laboratory');
+const School = require('../models/School');
 const StockItem = require('../models/StockItem');
 const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
@@ -8,7 +9,7 @@ const stationService = require('../services/station.service');
 const kitService = require('../services/kit.service');
 const termService = require('../services/labDeliveryTerm.service');
 const { generateTermNumber } = require('../services/termNumber.service');
-const { computeLabIndicators } = require('../services/labIndicators.service');
+const { computeLabIndicators, computePreventiveSchedule } = require('../services/labIndicators.service');
 
 const populateRefs = [
   { path: 'school', select: 'name inep municipio' },
@@ -21,7 +22,21 @@ const populateRefs = [
 exports.list = asyncHandler(async (req, res) => {
   const { q, status, school, kind } = req.query;
   const filter = {};
-  if (q) filter.name = new RegExp(q, 'i');
+
+  if (q) {
+    const rx = new RegExp(q.trim(), 'i');
+    // Acha as escolas cujo NOME ou INEP batem com o termo, para incluir os
+    // laboratórios/setores ligados a elas no resultado da busca.
+    const matchedSchools = await School.find({
+      $or: [{ name: rx }, { inep: rx }],
+    }).select('_id').lean();
+    const schoolIds = matchedSchools.map((s) => s._id);
+
+    // Busca por nome do laboratório/setor OU pela escola (nome/INEP).
+    filter.$or = [{ name: rx }];
+    if (schoolIds.length) filter.$or.push({ school: { $in: schoolIds } });
+  }
+
   if (status) filter.status = status;
   if (school) filter.school = school;
   if (kind) filter.kind = kind; // 'laboratorio' | 'administrativo'
@@ -35,7 +50,22 @@ exports.list = asyncHandler(async (req, res) => {
 exports.get = asyncHandler(async (req, res) => {
   const lab = await Laboratory.findById(req.params.id).populate(populateRefs);
   if (!lab) throw new AppError('Laboratório não encontrado', 404);
-  res.json({ success: true, laboratory: lab });
+
+  // Calcula dinamicamente a agenda de preventiva (aniversário da montagem).
+  // Assim a "Próx. preventiva" aparece mesmo em labs que nunca tiveram uma
+  // OS preventiva finalizada (quando nextPreventiveAt ainda não foi gravado).
+  const obj = lab.toObject({ virtuals: true });
+  if (lab.kind === 'laboratorio') {
+    const baseDate = lab.assemblyDate || lab.createdAt;
+    const prev = computePreventiveSchedule(baseDate, lab.lastInspectionAt);
+    // Usa a data calculada como fallback, mantendo a gravada se houver e for futura.
+    obj.nextPreventiveAt = lab.nextPreventiveAt || prev.nextDue;
+    obj.preventiveDue = prev.due;
+    obj.preventiveOverdue = prev.overdue;
+    obj.daysToPreventive = prev.daysTo;
+  }
+
+  res.json({ success: true, laboratory: obj });
 });
 
 exports.create = asyncHandler(async (req, res) => {
