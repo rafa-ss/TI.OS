@@ -312,7 +312,7 @@ export default function Laboratories() {
               <EmptyState title="Nenhum setor"
                 description="Cadastre um Setor Administrativo."/>
             ) : (
-              <div className="space-y-2">
+              <div className="h-[720px] overflow-y-auto space-y-2">
                 {adminItems.map(lab => (
                   <AdminListItem key={lab._id} lab={lab}
                     isAdmin={isAdmin}
