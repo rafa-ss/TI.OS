@@ -4,6 +4,8 @@ const ctrl = require('../controllers/report.controller');
 
 router.use(authenticate);
 
+router.get('/analytics', ctrl.analytics);
+router.get('/history', ctrl.history);
 router.get('/orders/excel', ctrl.ordersExcel);
 router.get('/orders/pdf', ctrl.ordersPdf);
 router.get('/orders/by-technician', ctrl.byTechnician);

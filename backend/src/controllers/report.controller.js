@@ -1,5 +1,18 @@
 const asyncHandler = require('../utils/asyncHandler');
 const reportService = require('../services/report.service');
+const analyticsService = require('../services/analytics.service');
+
+exports.analytics = asyncHandler(async (req, res) => {
+  const data = await analyticsService.computeAnalytics(req.query);
+  res.json({ success: true, data });
+});
+
+exports.history = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = Math.min(parseInt(req.query.limit || '15', 10), 100);
+  const data = await analyticsService.ordersHistory(req.query, page, limit);
+  res.json({ success: true, ...data });
+});
 
 exports.ordersExcel = asyncHandler(async (req, res) => {
   const buf = await reportService.buildOrdersExcel(req.query);

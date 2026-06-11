@@ -1,15 +1,23 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  BarChart3, FileText, Calendar, User as UserIcon, ClipboardList, FlaskConical,
-  ExternalLink, Plus, Pencil, Trash2, MapPin, Clock, Users, Download
+  BarChart3, FileText, FileSpreadsheet, Calendar, User as UserIcon, ClipboardList,
+  FlaskConical, School as SchoolIcon, Wrench, CheckCircle2, Clock, Users, Plus,
+  Pencil, Trash2, MapPin, Download, RefreshCw, ChevronDown, ChevronUp, Filter, Timer,
 } from 'lucide-react';
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  PieChart, Pie, Cell, BarChart, Bar,
+} from 'recharts';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { PageLoader } from '../components/Loading';
 import Modal from '../components/Modal';
+import Pagination from '../components/Pagination';
 import SchoolCombobox from '../components/SchoolCombobox';
-import { formatDateOnly, ROLE_LABEL } from '../utils/format';
+import {
+  formatDateOnly, ROLE_LABEL, STATUS_LABEL, STATUS_ROW_COLOR, SERVICE_TYPE_LABEL,
+} from '../utils/format';
 
 const ACTIVITY_TYPES = [
   { v: 'montagem_lab', l: 'Montagem de laboratório' },
@@ -20,72 +28,452 @@ const ACTIVITY_TYPES = [
   { v: 'outro', l: 'Outro' },
 ];
 
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-function firstDayMonth() {
-  const d = new Date();
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
-}
+const STATUS_OPTIONS = [
+  { v: '', l: 'Todos os status' },
+  { v: 'aberta', l: 'Aberta' },
+  { v: 'em_andamento', l: 'Em andamento' },
+  { v: 'aguardando_peca', l: 'Aguardando peça' },
+  { v: 'finalizada', l: 'Finalizada' },
+  { v: 'entregue', l: 'Entregue' },
+  { v: 'cancelada', l: 'Cancelada' },
+];
+
+// Cores dos gráficos por status (alinhadas ao restante do sistema)
+const STATUS_CHART_COLOR = {
+  aberta: '#10b981',
+  em_andamento: '#f59e0b',
+  aguardando_peca: '#8b5cf6',
+  finalizada: '#0ea5e9',
+  entregue: '#14b8a6',
+  cancelada: '#f43f5e',
+};
+const BAR_PALETTE = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#64748b', '#eab308'];
+
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function firstDayMonth() { const d = new Date(); d.setMonth(d.getMonth() - 5); d.setDate(1); return d.toISOString().slice(0, 10); }
 
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole('admin');
 
-  // Filtros
-  const [from, setFrom] = useState(firstDayMonth());
-  const [to, setTo] = useState(todayISO());
-  const [targetUser, setTargetUser] = useState(user?._id || '');
+  // ===== Filtros =====
+  const [filters, setFilters] = useState({
+    from: firstDayMonth(),
+    to: todayISO(),
+    technician: '',
+    school: '',
+    laboratory: '',
+    status: '',
+    serviceType: '',
+  });
+  const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+
   const [staff, setStaff] = useState([]);
+  const [labs, setLabs] = useState([]);
 
-  // Dados
-  const [data, setData] = useState(null);
+  // ===== Dados analíticos =====
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null);
-  const [openForm, setOpenForm] = useState(false);
 
-  // Para admin: dados do "geralzão"
-  const [team, setTeam] = useState(null);
-  const [showTeam, setShowTeam] = useState(false);
+  // ===== Histórico paginado =====
+  const [history, setHistory] = useState({ items: [], page: 1, totalPages: 1, total: 0 });
+  const [histPage, setHistPage] = useState(1);
 
-  // Carrega lista de staff (só admin)
+  // ===== Respaldo de ponto (atividades externas) =====
+  const [showPonto, setShowPonto] = useState(false);
+
+  // Carrega opções dos filtros (técnicos e laboratórios)
   useEffect(() => {
-    if (!isAdmin) return;
-    Promise.all([
-      api.get('/users', { params: { role: 'tecnico', limit: 100 } }),
-      api.get('/users', { params: { role: 'admin', limit: 100 } }),
-    ]).then(([t, a]) => {
-      const list = [...(t.data.items || []), ...(a.data.items || [])];
-      const map = new Map(list.map(u => [u._id, u]));
-      setStaff([...map.values()].sort((x, y) => x.name.localeCompare(y.name)));
+    api.get('/users/staff').then((r) => {
+      setStaff((r.data.items || []).filter((u) => ['admin', 'tecnico'].includes(u.role)));
     }).catch(() => {});
-  }, [isAdmin]);
+    api.get('/laboratories', { params: { kind: 'laboratorio', limit: 300 } })
+      .then((r) => setLabs(r.data.items || [])).catch(() => {});
+  }, []);
 
-  const load = useCallback(async () => {
+  const cleanParams = useCallback(() => {
+    const p = {};
+    Object.entries(filters).forEach(([k, v]) => { if (v) p[k] = v; });
+    return p;
+  }, [filters]);
+
+  const loadAnalytics = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { from, to };
-      if (isAdmin && targetUser) params.user = targetUser;
+      const { data } = await api.get('/reports/analytics', { params: cleanParams() });
+      setAnalytics(data.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Erro ao gerar relatório');
+    } finally { setLoading(false); }
+  }, [cleanParams]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const { data } = await api.get('/reports/history', { params: { ...cleanParams(), page: histPage, limit: 15 } });
+      setHistory(data);
+    } catch { /* silencioso */ }
+  }, [cleanParams, histPage]);
+
+  useEffect(() => { loadAnalytics(); }, [loadAnalytics]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  function generate() {
+    setHistPage(1);
+    loadAnalytics();
+    loadHistory();
+    toast.success('Relatório atualizado');
+  }
+
+  // ===== Exportações =====
+  function downloadFile(path, params, filename) {
+    const qs = new URLSearchParams(params).toString();
+    const url = `${api.defaults.baseURL}${path}${qs ? '?' + qs : ''}`;
+    const token = localStorage.getItem('os_token');
+    toast.loading('Gerando arquivo...', { id: 'dl' });
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        toast.success('Arquivo gerado', { id: 'dl' });
+      })
+      .catch(() => toast.error('Erro ao gerar arquivo', { id: 'dl' }));
+  }
+  const exportPdf = () => downloadFile('/reports/orders/pdf', cleanParams(), `relatorio-os-${filters.from}-a-${filters.to}.pdf`);
+  const exportExcel = () => downloadFile('/reports/orders/excel', cleanParams(), `relatorio-os-${filters.from}-a-${filters.to}.xlsx`);
+
+  return (
+    <div className="space-y-5">
+      {/* ===== Cabeçalho ===== */}
+      <div className="card p-5 bg-gradient-to-r from-pref-azul-600 to-pref-azul-800 text-white border-0">
+        <h1 className="text-2xl font-bold flex items-center gap-2"><BarChart3 size={24} /> Relatórios Técnicos</h1>
+        <p className="text-sm text-white/80 mt-0.5">Geração de relatórios e indicadores operacionais</p>
+      </div>
+
+      {/* ===== Filtros ===== */}
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-semibold text-sm">
+          <Filter size={15} /> Filtros
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="label flex items-center gap-1"><Calendar size={13} /> Data inicial</label>
+            <input type="date" className="input" value={filters.from} onChange={(e) => setF('from', e.target.value)} />
+          </div>
+          <div>
+            <label className="label flex items-center gap-1"><Calendar size={13} /> Data final</label>
+            <input type="date" className="input" value={filters.to} onChange={(e) => setF('to', e.target.value)} />
+          </div>
+          <div>
+            <label className="label flex items-center gap-1"><UserIcon size={13} /> Técnico</label>
+            <select className="input" value={filters.technician} onChange={(e) => setF('technician', e.target.value)}>
+              <option value="">Todos</option>
+              {staff.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label flex items-center gap-1"><FlaskConical size={13} /> Laboratório</label>
+            <select className="input" value={filters.laboratory} onChange={(e) => setF('laboratory', e.target.value)}>
+              <option value="">Todos</option>
+              {labs.map((l) => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="label flex items-center gap-1"><SchoolIcon size={13} /> Escola</label>
+            <SchoolCombobox value={filters.school} onChange={(id) => setF('school', id || '')} />
+          </div>
+          <div>
+            <label className="label">Status</label>
+            <select className="input" value={filters.status} onChange={(e) => setF('status', e.target.value)}>
+              {STATUS_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Tipo de serviço</label>
+            <select className="input" value={filters.serviceType} onChange={(e) => setF('serviceType', e.target.value)}>
+              <option value="">Todos</option>
+              {Object.entries(SERVICE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button onClick={generate} className="btn-primary"><RefreshCw size={16} /> Gerar Relatório</button>
+          <button onClick={exportPdf} className="btn-secondary"><FileText size={16} /> Exportar PDF</button>
+          <button onClick={exportExcel} className="btn-secondary"><FileSpreadsheet size={16} /> Exportar Excel</button>
+        </div>
+      </div>
+
+      {loading || !analytics ? <PageLoader /> : (
+        <>
+        {/* ===== Seção 6 — Respaldo para Ponto (atividades externas) ===== */}
+          <PontoSection
+            show={showPonto}
+            onToggle={() => setShowPonto((s) => !s)}
+            isAdmin={isAdmin}
+            user={user}
+            staff={staff}
+            range={{ from: filters.from, to: filters.to }}
+          />
+          {/* ===== Indicadores Gerais (KPIs) ===== */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <Kpi label="Total de O.S." value={analytics.kpis.totalOrders} color="brand" icon={ClipboardList} />
+            <Kpi label="Finalizadas" value={analytics.kpis.finalizadas} color="emerald" icon={CheckCircle2} />
+            <Kpi label="Em andamento" value={analytics.kpis.pendentes} color="amber" icon={Clock} />
+            <Kpi label="Técnicos ativos" value={analytics.kpis.totalTecnicos} color="indigo" icon={Users} />
+            <Kpi label="Escolas" value={analytics.kpis.totalEscolas} color="sky" icon={SchoolIcon} />
+            <Kpi label="Laboratórios" value={analytics.kpis.totalLabs} color="violet" icon={FlaskConical} />
+          </div>
+
+          {/* ===== Seção 1 — Desempenho Operacional ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard title="O.S. por mês" icon={BarChart3}>
+              {analytics.byMonth.length ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={analytics.byMonth} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="value" name="O.S." stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
+
+            <ChartCard title="Status das O.S." icon={PieChartIcon}>
+              {analytics.byStatus.length ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={analytics.byStatus} dataKey="value" nameKey="status" cx="50%" cy="50%"
+                      innerRadius={55} outerRadius={90} paddingAngle={2}
+                      label={(e) => STATUS_LABEL[e.status] || e.status}>
+                      {analytics.byStatus.map((e, i) => (
+                        <Cell key={i} fill={STATUS_CHART_COLOR[e.status] || BAR_PALETTE[i % BAR_PALETTE.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [v, STATUS_LABEL[n] || n]} />
+                    <Legend formatter={(v) => STATUS_LABEL[v] || v} wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
+          </div>
+
+          {/* O.S. por semana */}
+          <ChartCard title="O.S. por semana" icon={Calendar}>
+            {analytics.byWeek.length ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={analytics.byWeek} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="O.S." fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <Empty />}
+          </ChartCard>
+
+          {/* ===== Seção 2 — Tipos de Atendimento ===== */}
+          <ChartCard title="Quantidade por Tipo de Serviço" icon={Wrench}>
+            {analytics.byType.length ? (
+              <ResponsiveContainer width="100%" height={Math.max(220, analytics.byType.length * 38)}>
+                <BarChart data={analytics.byType} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="type" width={150} tick={{ fontSize: 11 }}
+                    tickFormatter={(t) => SERVICE_TYPE_LABEL[t] || t} />
+                  <Tooltip formatter={(v) => [v, 'O.S.']} labelFormatter={(t) => SERVICE_TYPE_LABEL[t] || t} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {analytics.byType.map((_, i) => <Cell key={i} fill={BAR_PALETTE[i % BAR_PALETTE.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <Empty />}
+          </ChartCard>
+
+          {/* ===== Seção 3 — Produtividade dos Técnicos ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard title="Ranking de Técnicos" icon={Users}>
+              {analytics.byTechnician.length ? (
+                <div className="overflow-x-auto">
+                  <table className="table-modern">
+                    <thead><tr>
+                      <th>#</th><th>Técnico</th>
+                      <th className="text-center">Total</th>
+                      <th className="text-center">Finalizadas</th>
+                    </tr></thead>
+                    <tbody>
+                      {analytics.byTechnician.map((t, i) => (
+                        <tr key={i}>
+                          <td className="text-slate-400 font-bold">{i + 1}º</td>
+                          <td className="font-medium">{t.name || '—'}</td>
+                          <td className="text-center">{t.total}</td>
+                          <td className="text-center text-emerald-600 font-semibold">{t.finalizadas}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <Empty />}
+            </ChartCard>
+
+            <ChartCard title="Tempo Médio de Atendimento" icon={Timer}>
+              <div className="flex flex-col items-center justify-center h-[220px] gap-2">
+                <Timer size={40} className="text-pref-azul-500" />
+                <p className="text-5xl font-bold text-slate-900 dark:text-white">
+                  {analytics.kpis.avgHours}<span className="text-2xl text-slate-400 ml-1">h</span>
+                </p>
+                <p className="text-sm text-slate-500">Média entre abertura e conclusão (O.S. concluídas)</p>
+              </div>
+            </ChartCard>
+          </div>
+
+          {/* ===== Seção 4 — Escolas e Laboratórios ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard title="Escolas mais atendidas" icon={SchoolIcon}>
+              {analytics.bySchool.length ? (
+                <ResponsiveContainer width="100%" height={Math.max(200, analytics.bySchool.length * 34)}>
+                  <BarChart data={analytics.bySchool} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }}
+                      tickFormatter={(n) => (n && n.length > 22 ? n.slice(0, 22) + '…' : n)} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="O.S." fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
+
+            <ChartCard title="Laboratórios com mais chamados" icon={FlaskConical}>
+              {analytics.byLab.length ? (
+                <ResponsiveContainer width="100%" height={Math.max(200, analytics.byLab.length * 34)}>
+                  <BarChart data={analytics.byLab} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }}
+                      tickFormatter={(n) => (n && n.length > 22 ? n.slice(0, 22) + '…' : n)} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Chamados" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
+          </div>
+
+          {/* ===== Seção 5 — Histórico de Atividades ===== */}
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+              <ClipboardList size={16} className="text-pref-azul-600" />
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+                Histórico de Atividades <span className="text-slate-400 font-normal">({history.total})</span>
+              </h3>
+            </div>
+            {history.items.length === 0 ? <Empty text="Nenhuma O.S. no período/filtros." /> : (
+              <div className="overflow-x-auto">
+                <table className="table-modern">
+                  <thead><tr>
+                    <th>Nº O.S.</th><th>Data</th><th className="text-center">Técnico</th>
+                    <th>Escola</th><th>Laboratório</th>
+                    <th className="text-center">Tipo</th><th className="text-center">Status</th>
+                    <th className="text-center">Tempo</th>
+                  </tr></thead>
+                  <tbody>
+                    {history.items.map((o) => (
+                      <tr key={o._id} className={STATUS_ROW_COLOR[o.status] || ''}>
+                        <td className="font-mono font-semibold text-brand-600">{o.number}</td>
+                        <td className="text-xs whitespace-nowrap">{formatDateOnly(o.openedAt)}</td>
+                        <td className="text-center text-sm">{o.technician || <span className="text-slate-400 italic text-xs">—</span>}</td>
+                        <td className="text-sm max-w-[160px] truncate">{o.school || '—'}</td>
+                        <td className="text-sm max-w-[140px] truncate">{o.laboratory || '—'}</td>
+                        <td className="text-center text-xs">{SERVICE_TYPE_LABEL[o.serviceType] || o.serviceType}</td>
+                        <td className="text-center text-xs">{STATUS_LABEL[o.status] || o.status}</td>
+                        <td className="text-center text-xs whitespace-nowrap">{o.hours != null ? `${o.hours}h` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination page={history.page} totalPages={history.totalPages} onChange={setHistPage} />
+          </div>
+
+          
+        </>
+      )}
+    </div>
+  );
+}
+
+// PieChart icon (lucide não tem um nome direto consistente — usamos BarChart como fallback visual)
+function PieChartIcon(props) {
+  return <BarChart3 {...props} />;
+}
+
+function Kpi({ label, value, color, icon: Icon }) {
+  const colors = {
+    brand: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300',
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+    sky: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+    violet: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  };
+  return (
+    <div className="card p-4 flex items-center gap-3">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
+        <Icon size={20} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+        <p className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, icon: Icon, children }) {
+  return (
+    <div className="card p-4">
+      <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
+        {Icon && <Icon size={16} className="text-pref-azul-600" />} {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function Empty({ text = 'Sem dados para exibir.' }) {
+  return <p className="text-sm text-slate-400 text-center py-10">{text}</p>;
+}
+
+// ============================================================
+// Seção 6 — Respaldo para Ponto (mantém o recurso de atividades externas)
+// ============================================================
+function PontoSection({ show, onToggle, isAdmin, user, staff, range }) {
+  const [targetUser, setTargetUser] = useState(user?._id || '');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [openForm, setOpenForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!show) return;
+    setLoading(true);
+    try {
+      const params = { ...range };
+      if (isAdmin && targetUser && targetUser !== user?._id) params.user = targetUser;
       const { data } = await api.get('/staff-reports/activities', { params });
       setData(data);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Erro ao carregar');
+      toast.error(err.response?.data?.message || 'Erro ao carregar atividades');
     } finally { setLoading(false); }
-  }, [from, to, targetUser, isAdmin]);
+  }, [show, range, isAdmin, targetUser, user]);
 
   useEffect(() => { load(); }, [load]);
-
-  async function loadTeam() {
-    try {
-      const { data } = await api.get('/staff-reports/team-overview', { params: { from, to } });
-      setTeam(data);
-      setShowTeam(true);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Erro');
-    }
-  }
 
   async function removeActivity(id) {
     if (!confirm('Excluir esta atividade?')) return;
@@ -93,266 +481,106 @@ export default function Reports() {
       await api.delete(`/staff-reports/manual/${id}`);
       toast.success('Atividade removida');
       load();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Erro');
-    }
+    } catch (err) { toast.error(err.response?.data?.message || 'Erro'); }
   }
 
-  function download(type) {
-    const params = new URLSearchParams({ from, to });
-    if (isAdmin && targetUser && type !== 'team') params.append('user', targetUser);
-    if (type === 'respaldo') params.append('tipo', 'respaldo');
-
-    const path = type === 'team' ? '/staff-reports/team/pdf' : '/staff-reports/individual/pdf';
-    const url = `${api.defaults.baseURL}${path}?${params.toString()}`;
-
+  function downloadRespaldo() {
+    const params = new URLSearchParams({ ...range, tipo: 'respaldo' });
+    if (isAdmin && targetUser && targetUser !== user?._id) params.append('user', targetUser);
+    const url = `${api.defaults.baseURL}/staff-reports/individual/pdf?${params.toString()}`;
     const token = localStorage.getItem('os_token');
+    toast.loading('Gerando PDF...', { id: 'resp' });
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
+      .then((r) => r.blob())
+      .then((blob) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        const userName = (data?.user?.name || 'relatorio').replace(/\s+/g, '_');
-        a.download = type === 'team'
-          ? `relatorio-equipe-${from}-a-${to}.pdf`
-          : `${type === 'respaldo' ? 'respaldo-ponto' : 'relatorio'}-${userName}-${from}-a-${to}.pdf`;
+        a.download = `respaldo-ponto-${range.from}-a-${range.to}.pdf`;
         a.click();
+        toast.success('PDF gerado', { id: 'resp' });
       })
-      .catch(() => toast.error('Erro ao gerar PDF'));
+      .catch(() => toast.error('Erro ao gerar PDF', { id: 'resp' }));
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <BarChart3 size={22}/> Relatórios de Atividades
-          </h1>
-          <p className="text-sm text-slate-500">
-            {isAdmin
-              ? 'Acompanhe a produtividade da equipe e gere documentos oficiais.'
-              : 'Acompanhe suas atividades e gere o respaldo de ponto.'}
-          </p>
+    <div className="card overflow-hidden">
+      <button onClick={onToggle}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+        <div className="flex items-center gap-2">
+          <MapPin size={16} className="text-amber-600" />
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Respaldo para Ponto — Atividade Externa</h3>
         </div>
-        {isAdmin && (
-          <button onClick={loadTeam} className="btn-secondary">
-            <Users size={16}/> Ver "Geralzão" da equipe
-          </button>
-        )}
-      </div>
+        {show ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
 
-      {/* === FILTROS === */}
-      <div className="card p-4 grid md:grid-cols-4 gap-3 items-end">
-        <div>
-          <label className="label flex items-center gap-1"><Calendar size={13}/> De</label>
-          <input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)}/>
-        </div>
-        <div>
-          <label className="label flex items-center gap-1"><Calendar size={13}/> Até</label>
-          <input type="date" className="input" value={to} onChange={e => setTo(e.target.value)}/>
-        </div>
-        {isAdmin && (
-          <div>
-            <label className="label flex items-center gap-1"><UserIcon size={13}/> Servidor</label>
-            <select className="input" value={targetUser} onChange={e => setTargetUser(e.target.value)}>
-              <option value="">Eu mesmo ({user?.name})</option>
-              {staff.filter(u => u._id !== user?._id).map(u => (
-                <option key={u._id} value={u._id}>
-                  {u.name} ({ROLE_LABEL[u.role] || u.role})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <button onClick={load} className="btn-primary">Atualizar</button>
-      </div>
-
-      {loading || !data ? <PageLoader/> : (
-        <>
-          {/* === Resumo === */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat label="O.S. atendidas" value={data.summary.totalOrders} color="brand" icon={ClipboardList}/>
-            <Stat label="O.S. finalizadas" value={data.summary.ordersFinalized} color="emerald" icon={ClipboardList}/>
-            <Stat label="Laboratórios" value={data.summary.totalLabs} color="indigo" icon={FlaskConical}/>
-            <Stat label="Ativ. externas" value={data.summary.totalActivities} color="amber" icon={MapPin}/>
-          </div>
-
-          {/* === Botões de download === */}
-          <div className="card p-4 flex flex-wrap gap-2">
-            <button onClick={() => download('completo')} className="btn-primary">
-              <Download size={16}/> Baixar Relatório Geral (PDF)
-            </button>
-            <button onClick={() => download('respaldo')} className="btn-secondary">
-              <FileText size={16}/> Baixar Respaldo de Ponto (PDF)
-            </button>
-          </div>
-
-          {/* === Atividades externas (CRUD manual) === */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MapPin size={16} className="text-amber-600"/>
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-                  Atividades Externas (Respaldo do Ponto)
-                </h3>
+      {show && (
+        <div className="border-t border-slate-200 dark:border-slate-800 p-4 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            {isAdmin && (
+              <div>
+                <label className="label flex items-center gap-1"><UserIcon size={13} /> Servidor</label>
+                <select className="input" value={targetUser} onChange={(e) => setTargetUser(e.target.value)}>
+                  <option value={user?._id}>Eu mesmo ({user?.name})</option>
+                  {staff.filter((u) => u._id !== user?._id).map((u) => (
+                    <option key={u._id} value={u._id}>{u.name} ({ROLE_LABEL[u.role] || u.role})</option>
+                  ))}
+                </select>
               </div>
-              <button onClick={() => { setEditing(null); setOpenForm(true); }} className="btn-primary !py-1.5 text-sm">
-                <Plus size={14}/> Nova atividade
-              </button>
-            </div>
+            )}
+            <button onClick={() => { setEditing(null); setOpenForm(true); }} className="btn-primary !py-2">
+              <Plus size={15} /> Nova atividade
+            </button>
+            <button onClick={downloadRespaldo} className="btn-secondary !py-2">
+              <Download size={15} /> Baixar Respaldo (PDF)
+            </button>
+          </div>
 
-            {data.activities.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-slate-500 text-center">
-                Nenhuma atividade externa registrada neste período.
-                <br/><span className="text-xs">Use este recurso para registrar visitas, montagens de lab, reuniões etc. — serve de respaldo do ponto.</span>
-              </p>
-            ) : (
+          {loading ? <PageLoader /> : !data || data.activities.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-6">
+              Nenhuma atividade externa registrada neste período.
+              <br /><span className="text-xs">Registre visitas, montagens, reuniões etc. — serve de respaldo do ponto.</span>
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
               <table className="table-modern">
                 <thead><tr>
-                  <th>Data</th><th>Horário</th><th>Tipo</th><th>Local</th><th>Descrição</th><th></th>
+                  <th>Data</th><th>Saída</th><th>Retorno</th><th>Tipo</th><th>Local</th><th>Serviço executado</th><th></th>
                 </tr></thead>
                 <tbody>
-                  {data.activities.map(a => (
+                  {data.activities.map((a) => (
                     <tr key={a._id}>
-                      <td className="whitespace-nowrap">{formatDateOnly(a.date)}</td>
-                      <td className="text-xs whitespace-nowrap">
-                        {a.startTime && a.endTime ? `${a.startTime} – ${a.endTime}` : (a.startTime || '—')}
-                      </td>
+                      <td className="whitespace-nowrap text-sm">{formatDateOnly(a.date)}</td>
+                      <td className="text-xs whitespace-nowrap">{a.startTime || '—'}</td>
+                      <td className="text-xs whitespace-nowrap">{a.endTime || '—'}</td>
                       <td className="text-xs">
                         <span className="badge bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                          {ACTIVITY_TYPES.find(t => t.v === a.type)?.l || a.type}
+                          {ACTIVITY_TYPES.find((t) => t.v === a.type)?.l || a.type}
                         </span>
                       </td>
-                      <td className="text-sm max-w-[200px] truncate">{a.school?.name || a.location || '-'}</td>
-                      <td className="text-sm max-w-[300px] truncate">{a.description}</td>
-                      <td className="flex justify-end gap-1">
-                        <button onClick={() => { setEditing(a); setOpenForm(true); }} className="btn-ghost p-1.5"><Pencil size={14}/></button>
-                        <button onClick={() => removeActivity(a._id)} className="btn-ghost p-1.5 text-rose-500"><Trash2 size={14}/></button>
+                      <td className="text-sm max-w-[180px] truncate">{a.school?.name || a.location || '—'}</td>
+                      <td className="text-sm max-w-[280px] truncate">{a.description}</td>
+                      <td>
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => { setEditing(a); setOpenForm(true); }} className="btn-ghost p-1.5"><Pencil size={14} /></button>
+                          <button onClick={() => removeActivity(a._id)} className="btn-ghost p-1.5 text-rose-500"><Trash2 size={14} /></button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-
-          {/* === O.S. atendidas === */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-              <ClipboardList size={16} className="text-pref-azul-600"/>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Ordens de Serviço Atendidas ({data.orders.length})</h3>
             </div>
-            {data.orders.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-slate-500 text-center">Nenhuma O.S. neste período.</p>
-            ) : (
-              <table className="table-modern">
-                <thead><tr><th>Nº</th><th>Data</th><th>Escola</th><th>Problema</th><th>Status</th></tr></thead>
-                <tbody>
-                  {data.orders.map(o => (
-                    <tr key={o._id}>
-                      <td className="font-mono text-xs">{o.number}</td>
-                      <td className="text-xs">{formatDateOnly(o.openedAt)}</td>
-                      <td className="text-sm max-w-[200px] truncate">{o.school?.name || '-'}</td>
-                      <td className="text-sm max-w-[300px] truncate">{o.problemReported}</td>
-                      <td className="text-xs">
-                        <span className="badge bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{o.status}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* === Laboratórios === */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-              <FlaskConical size={16} className="text-indigo-600"/>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Laboratórios ({data.labs.length})</h3>
-            </div>
-            {data.labs.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-slate-500 text-center">Nenhum laboratório neste período.</p>
-            ) : (
-              <table className="table-modern">
-                <thead><tr><th>Nome</th><th>Escola</th><th>Status</th><th>Data</th></tr></thead>
-                <tbody>
-                  {data.labs.map(l => (
-                    <tr key={l._id}>
-                      <td className="text-sm font-medium">{l.name}</td>
-                      <td className="text-sm">{l.school?.name || '-'}</td>
-                      <td className="text-xs">{l.status}</td>
-                      <td className="text-xs">{formatDateOnly(l.assemblyDate || l.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </>
+          )}
+        </div>
       )}
 
       <ActivityFormModal
         open={openForm}
         item={editing}
-        forUser={targetUser || user?._id}
+        forUser={isAdmin && targetUser !== user?._id ? targetUser : user?._id}
         onClose={() => setOpenForm(false)}
         onSaved={() => { setOpenForm(false); load(); }}
       />
-
-      {/* === Modal Team Overview (admin) === */}
-      <Modal
-        open={showTeam}
-        onClose={() => setShowTeam(false)}
-        size="lg"
-        title={`Geralzão da equipe (${from} a ${to})`}
-        footer={
-          <>
-            <button onClick={() => setShowTeam(false)} className="btn-secondary">Fechar</button>
-            <button onClick={() => download('team')} className="btn-primary">
-              <Download size={16}/> Baixar PDF
-            </button>
-          </>
-        }
-      >
-        {team ? (
-          <table className="table-modern">
-            <thead><tr>
-              <th>Servidor</th>
-              <th className="text-center">O.S.</th>
-              <th className="text-center">Finalizadas</th>
-              <th className="text-center">Labs</th>
-              <th className="text-center">Externas</th>
-              <th className="text-center">Total</th>
-            </tr></thead>
-            <tbody>
-              {team.members.map(m => (
-                <tr key={m._id}>
-                  <td><span className="font-medium">{m.name}</span> <span className="text-xs text-slate-500">{ROLE_LABEL[m.role]}</span></td>
-                  <td className="text-center">{m.orders}</td>
-                  <td className="text-center text-emerald-600 font-semibold">{m.finalized}</td>
-                  <td className="text-center">{m.labs}</td>
-                  <td className="text-center">{m.activities}</td>
-                  <td className="text-center font-bold text-pref-azul-600">{m.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : <PageLoader/>}
-      </Modal>
-    </div>
-  );
-}
-
-function Stat({ label, value, color, icon: Icon }) {
-  return (
-    <div className="card p-4 flex items-center gap-3">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-${color}-100 text-${color}-700 dark:bg-${color}-900/30 dark:text-${color}-300`}>
-        <Icon size={20}/>
-      </div>
-      <div>
-        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</p>
-        <p className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">{value}</p>
-      </div>
     </div>
   );
 }
@@ -362,13 +590,8 @@ function Stat({ label, value, color, icon: Icon }) {
 // ============================================================
 function ActivityFormModal({ open, item, forUser, onClose, onSaved }) {
   const empty = {
-    date: todayISO(),
-    startTime: '',
-    endTime: '',
-    school: '',
-    location: '',
-    description: '',
-    type: 'visita_tecnica',
+    date: todayISO(), startTime: '', endTime: '', school: '', location: '',
+    description: '', type: 'visita_tecnica',
   };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -381,20 +604,19 @@ function ActivityFormModal({ open, item, forUser, onClose, onSaved }) {
     // eslint-disable-next-line
   }, [open, item]);
 
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e) {
     e?.preventDefault();
     if (!form.description.trim()) return toast.error('Descreva a atividade');
     if (!form.date) return toast.error('Informe a data');
-
     setSaving(true);
     try {
       const payload = { ...form };
-      Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
+      Object.keys(payload).forEach((k) => payload[k] === '' && delete payload[k]);
       if (forUser) payload.user = forUser;
       if (item) await api.put(`/staff-reports/manual/${item._id}`, payload);
-      else      await api.post('/staff-reports/manual', payload);
+      else await api.post('/staff-reports/manual', payload);
       toast.success('Atividade salva');
       onSaved?.();
     } catch (err) {
@@ -403,10 +625,7 @@ function ActivityFormModal({ open, item, forUser, onClose, onSaved }) {
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      size="md"
+    <Modal open={open} onClose={onClose} size="md"
       title={item ? 'Editar atividade externa' : 'Registrar atividade externa'}
       footer={
         <>
@@ -415,50 +634,42 @@ function ActivityFormModal({ open, item, forUser, onClose, onSaved }) {
             {saving ? 'Salvando...' : (item ? 'Salvar' : 'Registrar')}
           </button>
         </>
-      }
-    >
+      }>
       <form onSubmit={submit} className="space-y-3">
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="label">Data *</label>
-            <input type="date" required className="input" value={form.date}
-              onChange={e => set('date', e.target.value)}/>
+            <input type="date" required className="input" value={form.date} onChange={(e) => set('date', e.target.value)} />
           </div>
           <div>
-            <label className="label flex items-center gap-1"><Clock size={13}/> Início</label>
-            <input type="time" className="input" value={form.startTime}
-              onChange={e => set('startTime', e.target.value)}/>
+            <label className="label flex items-center gap-1"><Clock size={13} /> Saída</label>
+            <input type="time" className="input" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} />
           </div>
           <div>
-            <label className="label flex items-center gap-1"><Clock size={13}/> Fim</label>
-            <input type="time" className="input" value={form.endTime}
-              onChange={e => set('endTime', e.target.value)}/>
+            <label className="label flex items-center gap-1"><Clock size={13} /> Retorno</label>
+            <input type="time" className="input" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} />
           </div>
         </div>
-
         <div>
           <label className="label">Tipo de atividade</label>
-          <select className="input" value={form.type} onChange={e => set('type', e.target.value)}>
-            {ACTIVITY_TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+          <select className="input" value={form.type} onChange={(e) => set('type', e.target.value)}>
+            {ACTIVITY_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
           </select>
         </div>
-
         <div>
           <label className="label">Escola (opcional)</label>
-          <SchoolCombobox value={form.school} onChange={(id) => set('school', id)}/>
+          <SchoolCombobox value={form.school} onChange={(id) => set('school', id)} />
         </div>
-
         <div>
           <label className="label">Local (se não for escola)</label>
           <input className="input" placeholder="Ex.: Sede SEMEC, Posto de saúde, etc."
-            value={form.location} onChange={e => set('location', e.target.value)}/>
+            value={form.location} onChange={(e) => set('location', e.target.value)} />
         </div>
-
         <div>
-          <label className="label">Descrição da atividade *</label>
+          <label className="label">Serviço executado / descrição *</label>
           <textarea required rows={3} className="input"
-            placeholder="Ex.: Acompanhei a equipe na montagem do laboratório da EMEIF X. Configurei os PCs e roteadores."
-            value={form.description} onChange={e => set('description', e.target.value)}/>
+            placeholder="Ex.: Montagem do laboratório da EMEIF X, configuração de PCs e roteadores."
+            value={form.description} onChange={(e) => set('description', e.target.value)} />
         </div>
       </form>
     </Modal>
