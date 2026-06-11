@@ -132,10 +132,9 @@ export default function Dashboard() {
         <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
           <Monitor size={13}/> Laboratórios
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
           <Kpi to="/laboratorios" icon={Monitor} color="indigo" label="Labs ativos" value={labs.ativos}/>
           <Kpi to="/laboratorios" icon={XCircle} color="rose" label="Com defeito" value={labs.comDefeito} pulse={labs.comDefeito > 0}/>
-          <Kpi to="/laboratorios" icon={CalendarClock} color="orange" label="Preventiva devida" value={labs.preventivaDevida} pulse={labs.preventivaDevida > 0}/>
           <Kpi to="/laboratorios" icon={Eye} color="amber" label="Sem vistoria" value={labs.semVistoria}/>
           <Kpi to="/equipamentos" icon={Boxes} color="emerald" label="Estoque" value={estoque.total} sub="unidades"/>
         </div>
