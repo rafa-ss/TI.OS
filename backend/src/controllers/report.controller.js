@@ -29,3 +29,10 @@ exports.mostMaintained = asyncHandler(async (_req, res) => {
   const data = await reportService.mostMaintainedEquipment();
   res.json({ success: true, data });
 });
+
+exports.laboratoriesExcel = asyncHandler(async (req, res) => {
+  const buf = await reportService.buildLaboratoriesExcel(req.query);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="laboratorios-${Date.now()}.xlsx"`);
+  res.end(buf);
+});

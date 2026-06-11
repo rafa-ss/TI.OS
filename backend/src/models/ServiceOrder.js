@@ -25,6 +25,25 @@ const SERVICE_TYPES = [
   'outro',
 ];
 
+// Itens dos checklists de manutenção de laboratório
+const PREVENTIVE_ITEMS = [
+  'limpeza_fisica',
+  'organizacao_cabos',
+  'atualizacao_software',
+  'verificacao_antivirus',
+  'verificacao_rede',
+  'verificacao_eletrica',
+  'verificacao_perifericos',
+];
+const CORRECTIVE_ITEMS = [
+  'equipamento_defeito',
+  'troca_pecas',
+  'substituicao_equipamento',
+  'formatacao',
+  'reinstalacao_sistema',
+  'correcao_rede',
+];
+
 const attachmentSchema = new mongoose.Schema(
   {
     name: String,
@@ -81,6 +100,32 @@ const serviceOrderSchema = new mongoose.Schema(
     patrimonio: { type: String, index: true, default: '' },
     brandModel: { type: String, default: '' },
     serialNumber: { type: String, default: '' },
+
+    // === Laboratório (OS de manutenção de laboratório) ===
+    laboratory: { type: mongoose.Schema.Types.ObjectId, ref: 'Laboratory', index: true },
+    // Estações afetadas (snapshot dos códigos PC01, PC02...). Guardamos o code
+    // e o id da estação para cruzar com o laboratório.
+    stations: {
+      type: [new mongoose.Schema({
+        stationId: { type: mongoose.Schema.Types.ObjectId },
+        code: { type: String, trim: true }, // "PC05"
+      }, { _id: false })],
+      default: [],
+    },
+    // Checklist de manutenção PREVENTIVA (itens marcados pelo técnico)
+    preventiveChecklist: {
+      type: [String],
+      default: [],
+      // valores possíveis: limpeza_fisica, organizacao_cabos, atualizacao_software,
+      // verificacao_antivirus, verificacao_rede, verificacao_eletrica, verificacao_perifericos
+    },
+    // Checklist de manutenção CORRETIVA
+    correctiveChecklist: {
+      type: [String],
+      default: [],
+      // valores possíveis: equipamento_defeito, troca_pecas, substituicao_equipamento,
+      // formatacao, reinstalacao_sistema, correcao_rede
+    },
 
     // Tipo de serviço a ser realizado
     serviceType: { type: String, default: 'outro', index: true },
@@ -146,6 +191,8 @@ serviceOrderSchema.pre('save', async function (next) {
 serviceOrderSchema.statics.STATUS = STATUS;
 serviceOrderSchema.statics.PRIORITY = PRIORITY;
 serviceOrderSchema.statics.SERVICE_TYPES = SERVICE_TYPES;
+serviceOrderSchema.statics.PREVENTIVE_ITEMS = PREVENTIVE_ITEMS;
+serviceOrderSchema.statics.CORRECTIVE_ITEMS = CORRECTIVE_ITEMS;
 
 serviceOrderSchema.index({ number: 'text', requesterName: 'text', problemReported: 'text' });
 

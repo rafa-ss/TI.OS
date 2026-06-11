@@ -31,8 +31,8 @@ export const PRIORITY_COLOR = {
 };
 
 export const EQUIPMENT_TYPE_LABEL = {
-  computador: 'Computador',
-notebook: 'Notebook',
+  computador: 'Computador ',
+  notebook: 'Notebook',
   impressora: 'Impressora',
   roteador: 'Roteador',
   nobreak: 'Nobreak',
@@ -76,7 +76,7 @@ export const EQUIPMENT_STATUS_COLOR = {
 };
 
 export const SERVICE_TYPE_LABEL = {
-  instalacao_software: 'Instalação de Software',
+  instalacao_programas: 'Instalação de Software',
   manutencao_preventiva: 'Manutenção preventiva',
   manutencao_corretiva: 'Manutenção corretiva',
   formatacao: 'Formatação',
@@ -92,6 +92,25 @@ export const SERVICE_TYPE_LABEL = {
 export const SERVICE_LOCATION_LABEL = {
   ctec: 'SEMEC-CTEC',
   externa: 'Visita externa',
+};
+
+// Itens dos checklists de manutenção de laboratório
+export const PREVENTIVE_ITEM_LABEL = {
+  limpeza_fisica: 'Limpeza física',
+  organizacao_cabos: 'Organização de cabos',
+  atualizacao_software: 'Atualização de software',
+  verificacao_antivirus: 'Verificação de antivírus',
+  verificacao_rede: 'Verificação de rede',
+  verificacao_eletrica: 'Verificação elétrica',
+  verificacao_perifericos: 'Verificação dos periféricos',
+};
+export const CORRECTIVE_ITEM_LABEL = {
+  equipamento_defeito: 'Equipamento com defeito',
+  troca_pecas: 'Troca de peças',
+  substituicao_equipamento: 'Substituição de equipamentos',
+  formatacao: 'Formatação',
+  reinstalacao_sistema: 'Reinstalação de sistema',
+  correcao_rede: 'Correção de rede',
 };
 
 export const SERVICE_LOCATION_COLOR = {

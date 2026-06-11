@@ -8,6 +8,17 @@ const SERVICE_TYPES = [
   'instalacao_equipamento', 'suporte_remoto', 'visita_tecnica', 'outro',
 ];
 
+/**
+ * Enum tolerante: trata '' / null / undefined como ausência (aplica o default)
+ * em vez de rejeitar com 400. Evita erros chatos quando o frontend manda
+ * o campo vazio.
+ */
+const enumOrDefault = (values, def) =>
+  z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.enum(values).optional().default(def)
+  );
+
 const createSchema = z.object({
   requesterName: z.string().min(2),
   requesterPhone: z.string().optional().default(''),
@@ -18,20 +29,40 @@ const createSchema = z.object({
   patrimonio: z.string().optional().default(''),
   brandModel: z.string().optional().default(''),
   serialNumber: z.string().optional().default(''),
-  serviceType: z.enum(SERVICE_TYPES).optional().default('outro'),
-  serviceLocation: z.enum(['ctec', 'externa']).optional(),
+  serviceType: z.preprocess(
+    (v) => {
+      if (v === '' || v === null || v === undefined) return undefined;
+      // compat: valor antigo do frontend → valor canônico do backend
+      if (v === 'instalacao_software') return 'instalacao_programas';
+      return v;
+    },
+    z.enum(SERVICE_TYPES).optional().default('outro')
+  ),
+  serviceLocation: enumOrDefault(['ctec', 'externa'], 'externa'),
   problemReported: z.string().min(3),
   diagnosis: z.string().optional().default(''),
   serviceDone: z.string().optional().default(''),
   technician: z.string().optional(),
   helpers: z.array(z.string()).optional(),
-  priority: z.enum(PRIORITY).optional().default('media'),
-  status: z.enum(STATUS).optional().default('aberta'),
+  priority: enumOrDefault(PRIORITY, 'media'),
+  status: enumOrDefault(STATUS, 'aberta'),
   dueDate: z.string().optional(),
   // === Campos de migração (apenas admin pode usar) ===
   number: z.string().optional(),       // permite reaproveitar número de OS antiga
   openedAt: z.string().optional(),     // data de abertura customizada
   closedAt: z.string().optional(),     // data de conclusão customizada
+
+  // === Campos de OS de Laboratório (manutenção preventiva/corretiva) ===
+  laboratory: z.string().optional(),
+  // estações afetadas: aceita array de codes ("PC05") ou objetos { code, stationId }
+  stations: z.array(
+    z.union([
+      z.string(),
+      z.object({ code: z.string().optional(), stationId: z.string().optional() }).passthrough(),
+    ])
+  ).optional(),
+  preventiveChecklist: z.array(z.string()).optional(),
+  correctiveChecklist: z.array(z.string()).optional(),
 });
 
 const updateSchema = createSchema.partial();
@@ -40,6 +71,9 @@ const statusSchema = z.object({
   status: z.enum(STATUS),
   note: z.string().optional(),
   diagnosis: z.string().optional(),
+  // Permite registrar os checklists no momento da finalização
+  preventiveChecklist: z.array(z.string()).optional(),
+  correctiveChecklist: z.array(z.string()).optional(),
 });
 
 const commentSchema = z.object({

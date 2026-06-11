@@ -6,14 +6,18 @@ import SchoolCombobox from '../components/SchoolCombobox';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import StaffPicker from '../components/StaffPicker';
-import { SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL } from '../utils/format';
+import {
+  SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL,
+  PREVENTIVE_ITEM_LABEL, CORRECTIVE_ITEM_LABEL,
+} from '../utils/format';
 
 const SERVICE_TYPES = Object.keys(SERVICE_TYPE_LABEL);
+const LAB_SERVICE_TYPES = ['manutencao_preventiva', 'manutencao_corretiva'];
 
 // Tipos de equipamento simples — usuário só escolhe a categoria
 const EQUIPMENT_TYPES = ['computador', 'notebook', 'impressora',, 'outro'];
 
-export default function OrderFormModal({ open, onClose, order, onSaved }) {
+export default function OrderFormModal({ open, onClose, order, onSaved, prefill }) {
   const { hasRole } = useAuth();
   const isAdmin = hasRole('admin');
   const empty = {
@@ -30,10 +34,19 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
     closedAt: '',
     technician: '',
     helpers: [],
+    // Laboratório
+    laboratory: '',
+    stations: [],            // array de codes selecionados (PC05...)
+    preventiveChecklist: [],
+    correctiveChecklist: [],
   };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [staff, setStaff] = useState([]);
+  const [labs, setLabs] = useState([]);       // laboratórios da escola
+  const [labStations, setLabStations] = useState([]); // estações do lab selecionado
+
+  const isLabService = LAB_SERVICE_TYPES.includes(form.serviceType);
 
   useEffect(() => {
     if (!open) return;
@@ -65,12 +78,37 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
         closedAt: order.closedAt ? String(order.closedAt).slice(0, 10) : '',
         technician: order.technician?._id || '',
         helpers: (order.helpers || []).map(h => h._id || h),
+        laboratory: order.laboratory?._id || order.laboratory || '',
+        stations: (order.stations || []).map(s => s.code),
+        preventiveChecklist: order.preventiveChecklist || [],
+        correctiveChecklist: order.correctiveChecklist || [],
       });
     } else {
-      setForm(empty);
+      // Novo: aplica valores pré-preenchidos (ex.: aberto pela página do laboratório)
+      setForm({ ...empty, ...(prefill || {}) });
     }
     // eslint-disable-next-line
   }, [open, order]);
+
+  // Carrega os laboratórios da escola quando for serviço de laboratório
+  useEffect(() => {
+    if (!open || !isLabService || !form.school) { setLabs([]); return; }
+    api.get('/laboratories', { params: { school: form.school, kind: 'laboratorio', limit: 200 } })
+      .then(r => setLabs(r.data.items || []))
+      .catch(() => setLabs([]));
+    // eslint-disable-next-line
+  }, [open, isLabService, form.school]);
+
+  // Carrega as estações do laboratório selecionado
+  useEffect(() => {
+    if (!form.laboratory) { setLabStations([]); return; }
+    const lab = labs.find(l => l._id === form.laboratory);
+    if (lab && lab.stations) { setLabStations(lab.stations); return; }
+    api.get(`/laboratories/${form.laboratory}`)
+      .then(r => setLabStations(r.data.laboratory?.stations || []))
+      .catch(() => setLabStations([]));
+    // eslint-disable-next-line
+  }, [form.laboratory, labs]);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -90,13 +128,28 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
         setSaving(false);
         return;
       }
+      // Limpa campos de laboratório quando não for serviço de laboratório
+      if (!LAB_SERVICE_TYPES.includes(payload.serviceType)) {
+        payload.laboratory = '';
+        payload.stations = [];
+        payload.preventiveChecklist = [];
+        payload.correctiveChecklist = [];
+      }
+
       Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
       if (order) await api.put(`/orders/${order._id}`, payload);
       else       await api.post('/orders', payload);
       toast.success(order ? 'O.S. atualizada' : 'O.S. registrada — aguardando técnico iniciar');
       onSaved?.();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Erro ao salvar');
+      const data = err.response?.data;
+      // Mostra exatamente quais campos falharam na validação do backend
+      if (Array.isArray(data?.details) && data.details.length) {
+        const msg = data.details.map(d => `${d.field}: ${d.message}`).join(' · ');
+        toast.error(`${data.message || 'Erro de validação'} — ${msg}`, { duration: 6000 });
+      } else {
+        toast.error(data?.message || 'Erro ao salvar');
+      }
     } finally { setSaving(false); }
   }
 
@@ -213,6 +266,79 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
             </div>
           </div>
         </Section>
+
+        {/* === LABORATÓRIO (manutenção preventiva/corretiva) === */}
+        {isLabService && (
+          <section className="border-2 border-indigo-200 dark:border-indigo-800 rounded-xl p-4 bg-indigo-50/40 dark:bg-indigo-900/10">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 flex items-center gap-2">
+              <MonitorSmartphone size={16} className="text-indigo-600"/> Laboratório
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              {form.school
+                ? 'Selecione o laboratório e as estações afetadas. Os dados de cada estação são puxados automaticamente.'
+                : 'Selecione a escola acima para listar os laboratórios.'}
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="label">Laboratório</label>
+                <select className="input" value={form.laboratory}
+                  onChange={e => set('laboratory', e.target.value) || set('stations', [])}
+                  disabled={!form.school}>
+                  <option value="">— selecione —</option>
+                  {labs.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+                </select>
+                {form.school && labs.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1">Nenhum laboratório nesta escola.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Estações afetadas */}
+            {form.laboratory && labStations.length > 0 && (
+              <div className="mt-3">
+                <label className="label">Estações afetadas</label>
+                <div className="flex flex-wrap gap-2">
+                  {labStations.map(st => {
+                    const checked = form.stations?.includes(st.code);
+                    const dot = st.status === 'funcionando' ? 'bg-emerald-500'
+                      : st.status === 'manutencao' ? 'bg-amber-500'
+                      : st.status === 'defeito' ? 'bg-rose-500' : 'bg-slate-300';
+                    return (
+                      <button type="button" key={st.code}
+                        onClick={() => {
+                          const list = form.stations || [];
+                          set('stations', checked ? list.filter(x => x !== st.code) : [...list, st.code]);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm font-mono transition ${
+                          checked
+                            ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 font-semibold'
+                            : 'border-slate-300 dark:border-slate-700 hover:border-indigo-300 text-slate-600 dark:text-slate-300'
+                        }`}>
+                        <span className={`w-2 h-2 rounded-full ${dot}`}/> {st.code}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">{form.stations?.length || 0} estação(ões) selecionada(s)</p>
+              </div>
+            )}
+
+            {/* Checklist conforme o tipo */}
+            {form.serviceType === 'manutencao_preventiva' && (
+              <ChecklistGroup title="Manutenção preventiva — itens"
+                options={PREVENTIVE_ITEM_LABEL}
+                value={form.preventiveChecklist}
+                onChange={(v) => set('preventiveChecklist', v)}/>
+            )}
+            {form.serviceType === 'manutencao_corretiva' && (
+              <ChecklistGroup title="Manutenção corretiva — itens"
+                options={CORRECTIVE_ITEM_LABEL}
+                value={form.correctiveChecklist}
+                onChange={(v) => set('correctiveChecklist', v)}/>
+            )}
+          </section>
+        )}
 
         {/* LOCAL DO ATENDIMENTO */}
         <Section title="Local do atendimento" icon={MonitorSmartphone}>
@@ -350,6 +476,34 @@ export default function OrderFormModal({ open, onClose, order, onSaved }) {
         )}
       </form>
     </Modal>
+  );
+}
+
+function ChecklistGroup({ title, options, value = [], onChange }) {
+  const toggle = (k) => {
+    if (value.includes(k)) onChange(value.filter(x => x !== k));
+    else onChange([...value, k]);
+  };
+  return (
+    <div className="mt-3">
+      <label className="label">{title}</label>
+      <div className="grid sm:grid-cols-2 gap-2">
+        {Object.entries(options).map(([k, label]) => {
+          const checked = value.includes(k);
+          return (
+            <button type="button" key={k} onClick={() => toggle(k)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm text-left transition ${
+                checked
+                  ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 font-medium'
+                  : 'border-slate-300 dark:border-slate-700 hover:border-indigo-300 text-slate-700 dark:text-slate-300'
+              }`}>
+              <input type="checkbox" checked={checked} readOnly className="pointer-events-none accent-indigo-600"/>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

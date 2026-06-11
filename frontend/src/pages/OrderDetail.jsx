@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../services/api';
 import { PageLoader } from '../components/Loading';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { formatDate, ROLE_LABEL, SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR } from '../utils/format';
+import { formatDate, ROLE_LABEL, SERVICE_TYPE_LABEL, EQUIPMENT_TYPE_LABEL, SERVICE_LOCATION_LABEL, SERVICE_LOCATION_COLOR, PREVENTIVE_ITEM_LABEL, CORRECTIVE_ITEM_LABEL } from '../utils/format';
 import OrderFormModal from './OrderFormModal';
 import Modal from '../components/Modal';
 import { useAuth } from '../context/AuthContext';
@@ -300,6 +300,49 @@ export default function OrderDetail() {
             {order.diagnosis && <Block title="Diagnóstico técnico" text={order.diagnosis} />}
             {order.serviceDone && <Block title="Serviço realizado" text={order.serviceDone} />}
           </div>
+
+          {/* Seção de Laboratório (OS de manutenção de laboratório) */}
+          {order.laboratory && (
+            <div className="card p-5 space-y-3 text-sm">
+              <h3 className="font-semibold flex items-center gap-2">🧪 Laboratório</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link to={`/laboratorios/${order.laboratory._id || order.laboratory}`}
+                  className="text-brand-600 hover:underline font-medium">
+                  {order.laboratory.name || 'Ver laboratório'}
+                </Link>
+                {(order.stations && order.stations.length > 0) && (
+                  <div className="flex flex-wrap gap-1">
+                    {order.stations.map(s => (
+                      <span key={s.code} className="inline-flex px-2 py-0.5 rounded font-mono text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
+                        {s.code}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {order.preventiveChecklist?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Manutenção preventiva realizada:</p>
+                  <ul className="grid sm:grid-cols-2 gap-1">
+                    {order.preventiveChecklist.map(i => (
+                      <li key={i} className="text-xs flex items-center gap-1 text-emerald-700 dark:text-emerald-300">✓ {PREVENTIVE_ITEM_LABEL[i] || i}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {order.correctiveChecklist?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Manutenção corretiva realizada:</p>
+                  <ul className="grid sm:grid-cols-2 gap-1">
+                    {order.correctiveChecklist.map(i => (
+                      <li key={i} className="text-xs flex items-center gap-1 text-amber-700 dark:text-amber-300">✓ {CORRECTIVE_ITEM_LABEL[i] || i}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="card p-5">
             <h3 className="font-semibold mb-3 flex items-center gap-2"><Paperclip size={16}/> Anexos</h3>

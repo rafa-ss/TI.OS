@@ -3,7 +3,7 @@ const app = require('./app');
 const env = require('./config/env');
 const logger = require('./utils/logger');
 const { connectDatabase } = require('./config/database');
-const { ensureAdmin, ensureDefaultKits, syncTermCounters } = require('./utils/seed');
+const { ensureAdmin, ensureDefaultKits, syncTermCounters, syncAllStations } = require('./utils/seed');
 
 async function bootstrap() {
   // Inicia o HTTP imediatamente — não trava sem Mongo
@@ -20,6 +20,7 @@ async function bootstrap() {
       await ensureAdmin();
       await ensureDefaultKits();
       await syncTermCounters();
+      await syncAllStations();
     } catch (err) {
       logger.warn(`[seed] não foi possível garantir admin/kits/contadores: ${err.message}`);
     }

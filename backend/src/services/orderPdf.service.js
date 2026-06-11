@@ -140,6 +140,7 @@ function buildOrderPdf(order) {
       doc.moveTo(rightX, sigLineY).lineTo(rightX + colW, sigLineY).stroke();
 
       // Legendas
+         const sigY = doc.page.height - 120;
       doc.font('Helvetica').fontSize(10).fillColor('#000');
       doc.text('Assinatura do Requerente', leftX, sigLineY + 6, { width: colW, align: 'center' });
       doc.text('Assinatura do Técnico Responsável', rightX, sigLineY + 6, { width: colW, align: 'center' });

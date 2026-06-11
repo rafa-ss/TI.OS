@@ -40,15 +40,7 @@ const DEFAULT_KITS = [
       { type: 'teclado', condition: 'novo', quantityPerKit: 1 },
     ],
   },
-  {
-    name: 'Kit Notebook + Mouse',
-    description: 'Notebook + Mouse',
-    icon: 'Laptop',
-    components: [
-      { type: 'notebook', condition: 'novo', quantityPerKit: 1 },
-      { type: 'mouse', condition: 'novo', quantityPerKit: 1 },
-    ],
-  },
+  
 ];
 
 async function ensureDefaultKits() {
@@ -92,11 +84,34 @@ async function syncTermCounters() {
   else logger.info('[seed] nenhum termo existente para sincronizar (começará em 01)');
 }
 
+/**
+ * Backfill: gera as estações (PC01..PCnn) para laboratórios que ainda não
+ * têm o array `stations` sincronizado com a quantidade de computadores.
+ * Idempotente.
+ */
+async function syncAllStations() {
+  const stationService = require('../services/station.service');
+  const labs = await Laboratory.find({ kind: 'laboratorio' });
+  let touched = 0;
+  for (const lab of labs) {
+    const before = (lab.stations || []).length;
+    stationService.syncStations(lab);
+    if ((lab.stations || []).length !== before || before === 0) {
+      stationService.recomputeComputerStatus(lab);
+      await lab.save();
+      touched++;
+    }
+  }
+  if (touched > 0) logger.info(`[seed] estações sincronizadas em ${touched} laboratório(s)`);
+  else logger.info('[seed] estações já sincronizadas');
+}
+
 async function runSeed() {
   await connectDatabase();
   await ensureAdmin();
   await ensureDefaultKits();
   await syncTermCounters();
+  await syncAllStations();
   await mongoose.disconnect();
   process.exit(0);
 }
@@ -108,4 +123,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ensureAdmin, ensureDefaultKits, syncTermCounters };
+module.exports = { ensureAdmin, ensureDefaultKits, syncTermCounters, syncAllStations };

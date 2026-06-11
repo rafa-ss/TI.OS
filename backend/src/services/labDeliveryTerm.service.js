@@ -193,6 +193,10 @@ function buildPdf(labId) {
       );
       doc.moveDown(0.6);
 
+
+      doc.font('Helvetica')
+      .fontSize(12)
+      .lineGap(6);
       // ============ Introdução ============
       doc.text(INTRO, 50, doc.y, { align: 'justify', width: contentW });
       doc.moveDown(0.5);
@@ -258,15 +262,15 @@ function buildPdf(labId) {
 
       // Assinaturas
       doc.moveDown(3);
-      const sigY = doc.page.height - 180;
+      const sigY = doc.page.height - 150;
       doc.moveTo(70, sigY).lineTo(265, sigY).stroke();
       doc.moveTo(330, sigY).lineTo(525, sigY).stroke();
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a')
         .text('Responsável pela entrega', 70, sigY + 5, { width: 195, align: 'center' })
         .text('Responsável pelo Recebimento', 330, sigY + 5, { width: 195, align: 'center' });
       doc.font('Helvetica').fontSize(9)
-        .text('SEMEC-CTEC', 70, sigY + 22, { width: 195, align: 'center' })
-        .text('ESCOLA', 330, sigY + 22, { width: 195, align: 'center' });
+      .text('SEMEC-CTEC', 70, sigY + 22, { width: 195, align: 'center' })
+      .text('ESCOLA', 330, sigY + 22, { width: 195, align: 'center' });
 
       doc.end();
     } catch (e) { reject(e); }
@@ -314,7 +318,7 @@ async function buildDocx(labId) {
     children: [
       new TextRun({
         text, bold: opts.bold || false,
-        size: opts.size || 22, font: 'Calibri',
+        size: opts.size || 24, font: 'Times New Roman',
       }),
     ],
   });

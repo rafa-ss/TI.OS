@@ -11,6 +11,11 @@ router.post('/', authorize('admin', 'tecnico'), ctrl.create);
 router.put('/:id', authorize('admin', 'tecnico'), ctrl.update);
 router.delete('/:id', authorize('admin'), ctrl.remove);
 router.post('/:id/deactivate', authorize('admin', 'tecnico'), ctrl.deactivate);
+router.post('/:id/inspect', authorize('admin', 'tecnico'), ctrl.inspect);
+
+// Estações de trabalho (mapa visual)
+router.get('/:id/stations/:stationId', ctrl.getStation);
+router.put('/:id/stations/:stationId', authorize('admin', 'tecnico'), ctrl.updateStation);
 
 // Termo de entrega (PDF e DOCX)
 router.get('/:id/term/pdf', ctrl.termPdf);

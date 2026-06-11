@@ -4,9 +4,11 @@ const StockItem = require('../models/StockItem');
 const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
 const labService = require('../services/laboratory.service');
+const stationService = require('../services/station.service');
 const kitService = require('../services/kit.service');
 const termService = require('../services/labDeliveryTerm.service');
 const { generateTermNumber } = require('../services/termNumber.service');
+const { computeLabIndicators } = require('../services/labIndicators.service');
 
 const populateRefs = [
   { path: 'school', select: 'name inep municipio' },
@@ -91,6 +93,12 @@ exports.create = asyncHandler(async (req, res) => {
       note: notaCriacao,
     }],
   });
+
+  // Gera as estações automaticamente conforme a qtd de computadores
+  if (kindNorm === 'laboratorio') {
+    stationService.syncStations(lab);
+    await lab.save();
+  }
 
   const populated = await Laboratory.findById(lab._id).populate(populateRefs);
   res.status(201).json({ success: true, laboratory: populated });
@@ -197,6 +205,9 @@ exports.update = asyncHandler(async (req, res) => {
     lab.equipments = normEqs;
     lab.kits = kitSnapshots;
 
+    // Re-sincroniza as estações com a nova quantidade de computadores
+    stationService.syncStations(lab);
+
     if (toDebit.length > 0 || toReturn.length > 0) {
       const partes = [];
       if (toDebit.length) {
@@ -291,6 +302,105 @@ exports.deactivate = asyncHandler(async (req, res) => {
   res.json({ success: true, laboratory: populated });
 });
 
+/**
+ * Registrar VISTORIA/MANUTENÇÃO do laboratório (admin ou técnico).
+ * Atualiza os contadores de status dos computadores (active/maintenance/defective),
+ * grava a data da última vistoria e registra no histórico.
+ */
+/** Detalhe de uma estação. */
+exports.getStation = asyncHandler(async (req, res) => {
+  const lab = await Laboratory.findById(req.params.id)
+    .populate('school', 'name inep');
+  if (!lab) throw new AppError('Laboratório não encontrado', 404);
+
+  const station = lab.stations.id(req.params.stationId)
+    || lab.stations.find((s) => s.code === req.params.stationId);
+  if (!station) throw new AppError('Estação não encontrada', 404);
+
+  res.json({ success: true, station, lab: { _id: lab._id, name: lab.name, school: lab.school } });
+});
+
+/**
+ * Atualiza uma estação (admin ou técnico): apenas status e observação.
+ * A estação é identificada só pelo número (PCnn).
+ */
+exports.updateStation = asyncHandler(async (req, res) => {
+  if (!['admin', 'tecnico'].includes(req.user.role)) {
+    throw new AppError('Apenas técnicos ou administradores podem editar estações', 403);
+  }
+  const lab = await Laboratory.findById(req.params.id);
+  if (!lab) throw new AppError('Laboratório não encontrado', 404);
+
+  const station = lab.stations.id(req.params.stationId)
+    || lab.stations.find((s) => s.code === req.params.stationId);
+  if (!station) throw new AppError('Estação não encontrada', 404);
+
+  const { status, notes } = req.body;
+  const prevStatus = station.status;
+
+  if (status && Laboratory.STATION_STATUS.includes(status)) {
+    station.status = status;
+  }
+  if (notes !== undefined) station.notes = notes;
+
+  station.lastMaintenanceAt = new Date();
+  if (status && status !== prevStatus) {
+    lab.history.push({
+      user: req.user._id,
+      action: 'estacao_status',
+      note: `Estação ${station.code}: ${prevStatus} → ${station.status}`,
+    });
+  }
+
+  // Mantém os contadores do card coerentes com o mapa
+  stationService.recomputeComputerStatus(lab);
+  await lab.save();
+
+  const populated = await Laboratory.findById(lab._id).populate(populateRefs);
+  res.json({ success: true, laboratory: populated });
+});
+
+exports.inspect = asyncHandler(async (req, res) => {
+  if (!['admin', 'tecnico'].includes(req.user.role)) {
+    throw new AppError('Apenas técnicos ou administradores podem registrar manutenção/vistoria', 403);
+  }
+
+  const lab = await Laboratory.findById(req.params.id);
+  if (!lab) throw new AppError('Laboratório não encontrado', 404);
+
+  const active = Math.max(0, Number(req.body.active) || 0);
+  const maintenance = Math.max(0, Number(req.body.maintenance) || 0);
+  const defective = Math.max(0, Number(req.body.defective) || 0);
+  const note = (req.body.note || '').trim();
+
+  // Total de computadores no inventário do lab
+  const totalComputers = (lab.equipments || [])
+    .filter(e => String(e.type).toLowerCase().trim() === 'computador')
+    .reduce((a, e) => a + (e.quantity || 0), 0);
+
+  if (active + maintenance + defective > totalComputers) {
+    throw new AppError(
+      `A soma (ativos ${active} + manutenção ${maintenance} + defeito ${defective} = ${active + maintenance + defective}) ` +
+      `não pode passar do total de computadores do laboratório (${totalComputers}).`,
+      400
+    );
+  }
+
+  lab.computerStatus = { active, maintenance, defective };
+  lab.lastInspectionAt = new Date();
+  lab.history.push({
+    user: req.user._id,
+    action: 'vistoria',
+    note: note
+      ? `Vistoria: ${active} ativo(s), ${maintenance} em manutenção, ${defective} com defeito — ${note}`
+      : `Vistoria: ${active} ativo(s), ${maintenance} em manutenção, ${defective} com defeito`,
+  });
+
+  await lab.save();
+  const populated = await Laboratory.findById(lab._id).populate(populateRefs);
+  res.json({ success: true, laboratory: populated });
+});
+
 exports.summary = asyncHandler(async (_req, res) => {
   const byStatus = await Laboratory.aggregate([
     { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -304,14 +414,24 @@ exports.summary = asyncHandler(async (_req, res) => {
     { $group: { _id: null, total: { $sum: '$equipments.quantity' } } },
   ]);
 
+  // === Indicadores de gestão (apenas laboratórios de informática) ===
+  const indicators = await computeLabIndicators();
+
   res.json({
     success: true,
     data: {
       total, concluidos,
       totalEquipamentosEmUso: equipsAgg[0]?.total || 0,
       byStatus,
+      indicators,
     },
   });
+});
+
+/** Endpoint dedicado ao dashboard de laboratórios (KPIs + listas). */
+exports.dashboard = asyncHandler(async (_req, res) => {
+  const indicators = await computeLabIndicators();
+  res.json({ success: true, data: indicators });
 });
 
 exports.termPdf = asyncHandler(async (req, res) => {

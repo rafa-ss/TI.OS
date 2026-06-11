@@ -9,5 +9,6 @@ router.get('/orders/pdf', ctrl.ordersPdf);
 router.get('/orders/by-technician', ctrl.byTechnician);
 router.get('/orders/by-school', ctrl.bySchool);
 router.get('/equipment/most-maintained', ctrl.mostMaintained);
+router.get('/laboratories/excel', ctrl.laboratoriesExcel);
 
 module.exports = router;

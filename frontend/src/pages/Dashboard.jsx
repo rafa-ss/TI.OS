@@ -1,231 +1,394 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
-  ClipboardList, CheckCircle2, AlertTriangle, Activity, MonitorSmartphone,
-  School as SchoolIcon, ArrowUpRight
+  FlaskConical, XCircle, CalendarClock, Eye, Package, PackageMinus,
+  ClipboardList, Clock, Activity, CheckCircle2, AlertTriangle, Bell, ArrowUpRight,
+  Boxes, Monitor, ChevronRight, Loader2, ShieldCheck, RefreshCw, Layers,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line
-} from 'recharts';
 import api from '../services/api';
-import { PageLoader } from '../components/Loading';
-import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { formatDate } from '../utils/format';
+import { formatDate, SERVICE_TYPE_LABEL, typeLabel } from '../utils/format';
+import { useAuth } from '../context/AuthContext';
 import RecentMessagesCard from '../components/RecentMessagesCard';
 
-const PRIORITY_COLORS = { baixa: '#94a3b8', media: '#3b82f6', alta: '#f97316', urgente: '#e11d48' };
-const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// Mapa de ícones para a central de alertas (vem como string do backend)
+const ALERT_ICONS = { CalendarClock, XCircle, PackageMinus, Clock, Eye, AlertTriangle };
 
-/**
- * Card de KPI clicável. Aceita `to` (rota) — torna o card inteiro um botão
- * com efeito de hover e seta indicativa.
- */
-function StatCard({ icon: Icon, label, value, color = 'brand', sub, to }) {
-  const navigate = useNavigate();
-  const clickable = !!to;
+const ALERT_STYLE = {
+  critical: {
+    wrap: 'border-rose-500/40 bg-rose-50 dark:bg-rose-900/15',
+    dot: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400',
+  },
+  warning: {
+    wrap: 'border-amber-500/40 bg-amber-50 dark:bg-amber-900/15',
+    dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400',
+  },
+  info: {
+    wrap: 'border-sky-500/40 bg-sky-50 dark:bg-sky-900/15',
+    dot: 'bg-sky-500', text: 'text-sky-600 dark:text-sky-400',
+  },
+};
 
-  const inner = (
-    <>
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center
-        bg-${color}-100 text-${color}-700
-        dark:bg-${color}-900/30 dark:text-${color}-300 shrink-0`}>
-        <Icon size={22} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider flex items-center gap-1">
-          {label}
-          {clickable && (
-            <ArrowUpRight
-              size={14}
-              className="opacity-0 group-hover:opacity-100 transition text-brand-500"
-            />
-          )}
-        </p>
-        <p className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">{value}</p>
-        {sub && <p className="text-xs text-slate-500">{sub}</p>}
-      </div>
-    </>
-  );
+const HEALTH = {
+  ok:        { cell: 'bg-emerald-500', label: 'Operacional' },
+  manutencao:{ cell: 'bg-amber-500',   label: 'Em manutenção' },
+  defeito:   { cell: 'bg-rose-500',    label: 'Com defeito' },
+};
 
-  if (clickable) {
-    return (
-      <button
-        type="button"
-        onClick={() => navigate(to)}
-        className="card p-5 flex items-center gap-4 text-left group w-full
-                   hover:border-brand-400 dark:hover:border-brand-500
-                   hover:shadow-lg hover:-translate-y-0.5
-                   active:translate-y-0
-                   transition-all duration-200 cursor-pointer
-                   focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-      >
-        {inner}
-      </button>
-    );
-  }
-  return <div className="card p-5 flex items-center gap-4">{inner}</div>;
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
+  const { user } = useAuth();
+  const [d, setD] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(new Date());
+
+  async function load(silent = false) {
+    if (silent) setRefreshing(true); else setLoading(true);
+    try {
+      const r = await api.get('/dashboard/noc');
+      setD(r.data.data);
+    } catch { /* noop */ }
+    finally { setLoading(false); setRefreshing(false); }
+  }
 
   useEffect(() => {
-    api.get('/dashboard/summary')
-      .then(r => setData(r.data.data))
-      .finally(() => setLoading(false));
+    load();
+    // auto-refresh a cada 60s (sensação de painel ao vivo)
+    const i = setInterval(() => load(true), 60000);
+    const clock = setInterval(() => setNow(new Date()), 1000);
+    return () => { clearInterval(i); clearInterval(clock); };
+    // eslint-disable-next-line
   }, []);
 
-  if (loading) return <PageLoader />;
-  if (!data) return <p>Falha ao carregar.</p>;
+  if (loading) {
+    return <div className="flex items-center justify-center py-24 text-slate-400"><Loader2 className="animate-spin mr-2"/> Carregando painel...</div>;
+  }
+  if (!d) return <p className="text-slate-500">Falha ao carregar o painel.</p>;
 
-  const c = data.counters;
-  const monthly = data.monthly.map(m => ({
-    name: `${MONTHS[m._id.m-1]}/${String(m._id.y).slice(-2)}`,
-    Abertas: m.abertas,
-    Finalizadas: m.finalizadas,
-  }));
-  const pri = data.byPriority.map(p => ({ name: p._id, value: p.count }));
+  const { labs, estoque, os, alertas } = d;
+  const firstName = (user?.name || '').split(' ')[0] || 'Equipe';
+  const critical = alertas.filter(a => a.level === 'critical').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* ===== Cabeçalho / Saudação ===== */}
+      <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-900 dark:to-slate-950 text-white p-5 shadow-lg ring-1 ring-white/10">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-300 font-semibold flex items-center gap-1.5">
+              <ShieldCheck size={14}/> Coordenação de Tecnologia Educacional
+            </p>
+            <h1 className="text-2xl font-bold mt-1">{greeting()}, {firstName} 👋</h1>
+            <p className="text-sm text-slate-300 mt-0.5">
+              {now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              {' · '}
+              <span className="font-mono">{now.toLocaleTimeString('pt-BR')}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+              critical > 0 ? 'bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40'
+                : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40'}`}>
+              <span className={`w-2 h-2 rounded-full animate-pulse ${critical > 0 ? 'bg-rose-400' : 'bg-emerald-400'}`}/>
+              {critical > 0 ? `${critical} alerta(s) crítico(s)` : 'Tudo operacional'}
+            </div>
+            <button onClick={() => load(true)} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition" title="Atualizar">
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''}/>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Faixa de KPIs (misto: laboratórios + O.S.) ===== */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Visão geral. Clique em um cartão para abrir a tela correspondente.
+        <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
+          <FlaskConical size={13}/> Laboratórios
         </p>
-      </div>
-
-      {/* Cards clicáveis — cada um navega para a tela com filtros já aplicados */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard
-          icon={ClipboardList} label="Ativas" value={c.totalAtivas} color="sky"
-          sub={`${c.abertas} abertas`}
-          to="/ordens?status=aberta"
-        />
-        <StatCard
-          icon={Activity} label="Em andamento" value={c.emAndamento} color="amber"
-          to="/ordens?status=em_andamento"
-        />
-        
-        <StatCard
-          icon={CheckCircle2} label="Finalizadas" value={c.finalizadas + c.entregues} color="emerald"
-          to="/ordens?status=finalizada"
-        />
-        <StatCard
-          icon={MonitorSmartphone} label="Equipamentos" value={c.totalEquipamentos} color="indigo"
-          to="/equipamentos"
-        />
-        <StatCard
-          icon={SchoolIcon} label="Escolas" value={c.totalEscolas} color="teal"
-          to="/escolas"
-        />
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card p-5 lg:col-span-2">
-          <h3 className="font-semibold mb-4 text-slate-800 dark:text-slate-100">O.S. nos últimos 12 meses</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <LineChart data={monthly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b822" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={{ background: '#0f172a', border: 'none', color: '#fff', borderRadius: 8 }} />
-                <Legend />
-                <Line type="monotone" dataKey="Abertas" stroke="#3b82f6" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="Finalizadas" stroke="#10b981" strokeWidth={2.5} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+          <Kpi to="/laboratorios" icon={FlaskConical} color="indigo" label="Labs ativos" value={labs.ativos}/>
+          <Kpi to="/laboratorios" icon={XCircle} color="rose" label="Com defeito" value={labs.comDefeito} pulse={labs.comDefeito > 0}/>
+          <Kpi to="/laboratorios" icon={CalendarClock} color="orange" label="Preventiva devida" value={labs.preventivaDevida} pulse={labs.preventivaDevida > 0}/>
+          <Kpi to="/laboratorios" icon={Eye} color="amber" label="Sem vistoria" value={labs.semVistoria}/>
+          <Kpi to="/equipamentos" icon={Boxes} color="emerald" label="Estoque" value={estoque.total} sub="unidades"/>
         </div>
-
-        <div className="card p-5">
-          <h3 className="font-semibold mb-4 text-slate-800 dark:text-slate-100">Prioridades</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={pri} dataKey="value" nameKey="name" outerRadius={90} label>
-                  {pri.map((p) => (
-                    <Cell key={p.name} fill={PRIORITY_COLORS[p.name] || '#64748b'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+      </div>
+      <div>
+        <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
+          <ClipboardList size={13}/> Ordens de Serviço
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Kpi to="/ordens?status=aberta" icon={ClipboardList} color="sky" label="Abertas" value={os.abertas}/>
+          <Kpi to="/ordens?status=em_andamento" icon={Activity} color="amber" label="Em andamento" value={os.emAndamento}/>
+          <Kpi to="/ordens" icon={Clock} color="rose" label="Atrasadas" value={os.atrasadas} pulse={os.atrasadas > 0}/>
+          <Kpi to="/ordens?status=finalizada" icon={CheckCircle2} color="emerald" label="Finalizadas (mês)" value={os.finalizadasMes}/>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      {/* ===== Linha 1: Mapa (80%) + Alertas (20%) — altura fixa = 8 labs ===== */}
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        {/* Mapa dos laboratórios — 80% */}
+        <div className="xl:col-span-4">
+          <Panel title="Mapa dos Laboratórios" icon={Monitor} count={labs.mapa.length} to="/laboratorios"
+            className="noc-fixed flex flex-col">
+            {labs.mapa.length === 0 ? (
+              <Empty icon={FlaskConical} text="Nenhum laboratório cadastrado."/>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 flex-1 content-start">
+                  {labs.mapa.map(l => <LabMiniCard key={l._id} lab={l}/>)}
+                </div>
+                <div className="flex flex-wrap gap-3 text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <Legend dot="bg-emerald-500" label="Operacional"/>
+                  <Legend dot="bg-amber-500" label="Em manutenção"/>
+                  <Legend dot="bg-rose-500" label="Com defeito"/>
+                  <Legend dot="bg-slate-300 dark:bg-slate-600" label="Vazio"/>
+                </div>
+              </>
+            )}
+          </Panel>
+        </div>
 
-        {/* Card 3: Mensagens recentes — altura igual aos outros */}
-        <div className="h-[440px]">
+        {/* Central de alertas — 20% */}
+        <Panel title="Alertas" icon={Bell} count={alertas.length}
+          accent={critical > 0 ? 'rose' : 'slate'} className="noc-fixed flex flex-col">
+          {alertas.length === 0 ? (
+            <Empty icon={CheckCircle2} text="Tudo sob controle."/>
+          ) : (
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1">
+              {alertas.map((a, i) => {
+                const Icon = ALERT_ICONS[a.icon] || AlertTriangle;
+                const st = ALERT_STYLE[a.level] || ALERT_STYLE.info;
+                return (
+                  <Link key={i} to={a.link || '#'}
+                    className={`flex items-start gap-2 p-2 rounded-lg border ${st.wrap} hover:shadow-sm transition group`}>
+                    <span className={`mt-0.5 shrink-0 ${st.text}`}><Icon size={15}/></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-slate-800 dark:text-slate-100 leading-tight">{a.title}</p>
+                      {a.detail && <p className="text-[11px] text-slate-500 truncate">{a.detail}</p>}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* ===== Linha 2: Últimas O.S. (80%) + Mensagens (20%) — mesma altura fixa ===== */}
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        {/* Mensagens recentes (chat da equipe) — 20% */}
+        <div className="noc-fixed">
           <RecentMessagesCard />
         </div>
-
-        {/* Card 1: Produtividade — define a altura base dos demais */}
-        <div className="card p-4 h-[440px] flex flex-col">
-          <h3 className="font-semibold mb-2 text-slate-800 dark:text-slate-100">Produtividade da equipe</h3>
-          <div className="flex-1 min-h-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.productivity}
-                margin={{ top: 10, right: 12, left: -10, bottom: 28 }}
-                barCategoryGap="25%"
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b822" />
-                <XAxis
-                  dataKey="technician"
-                  stroke="#94a3b8"
-                  tick={{ fontSize: 11 }}
-                  interval={0}
-                  angle={-20}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: 'none', color: '#fff', borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
-                <Bar dataKey="finalizadas" fill="#10b981" radius={[6,6,0,0]} />
-                <Bar dataKey="total" fill="#3b82f6" radius={[6,6,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Últimas Ordens de Serviço — 80% */}
+        <div className="xl:col-span-4">
+          <Panel title="Últimas Ordens de Serviço" icon={ClipboardList} to="/ordens"
+            className="noc-fixed flex flex-col">
+            {os.ultimas.length === 0 ? (
+              <Empty icon={ClipboardList} text="Nenhuma O.S. registrada."/>
+            ) : (
+              <div className="overflow-y-auto -mx-1 flex-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                      <th className="py-2 px-2">Nº</th>
+                      <th className="py-2 px-2">Escola / Lab</th>
+                      <th className="py-2 px-2 hidden sm:table-cell">Tipo</th>
+                      <th className="py-2 px-2">Status</th>
+                      <th className="py-2 px-2 hidden md:table-cell">Abertura</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {os.ultimas.map(o => (
+                      <tr key={o._id} className="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td className="py-2 px-2">
+                          <Link to={`/ordens/${o._id}`} className="font-mono font-bold text-brand-600 hover:underline">{o.number}</Link>
+                        </td>
+                        <td className="py-2 px-2 min-w-0">
+                          <p className="truncate max-w-[220px]">{o.laboratory?.name || o.school?.name || '—'}</p>
+                        </td>
+                        <td className="py-2 px-2 hidden sm:table-cell text-slate-500">{SERVICE_TYPE_LABEL[o.serviceType] || o.serviceType}</td>
+                        <td className="py-2 px-2"><OsStatus status={o.status}/></td>
+                        <td className="py-2 px-2 hidden md:table-cell text-slate-400 text-xs">{formatDate(o.openedAt).split(' ')[0]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
         </div>
-
-        {/* Card 2: Últimas O.S. — altura igual ao card de produtividade */}
-        <div className="card overflow-hidden h-[440px] flex flex-col">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">Últimas O.S.</h3>
-            <Link to="/ordens" className="text-xs text-brand-600 hover:underline">ver todas</Link>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-          <table className="table-modern">
-            <thead>
-              <tr><th>Nº</th><th>Escola</th><th>Status</th><th>Prioridade</th><th>Abertura</th></tr>
-            </thead>
-            <tbody>
-              {data.recentOrders.map((o) => (
-                <tr key={o._id}>
-                  <td><Link to={`/ordens/${o._id}`} className="font-medium text-brand-600">{o.number}</Link></td>
-                  <td className="max-w-[180px] truncate">{o.school?.name || '-'}</td>
-                  <td><StatusBadge status={o.status} /></td>
-                  <td><PriorityBadge priority={o.priority} /></td>
-                  <td className="text-xs">{formatDate(o.openedAt)}</td>
-                </tr>
-              ))}
-              {data.recentOrders.length === 0 && (
-                <tr><td colSpan={5} className="text-center py-8 text-slate-500">Sem dados</td></tr>
-              )}
-            </tbody>
-          </table>
-          </div>
-        </div>
-
-        
       </div>
+
+      {/* ===== Movimentações de estoque ===== */}
+      <Panel title="Movimentações de estoque" icon={Layers} count={estoque.ultimos.length}>
+        {estoque.baixo.length > 0 && (
+          <div className="mb-3 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/15 border border-amber-300/40 text-[12px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+            <PackageMinus size={14}/>
+            <span><b>Estoque baixo:</b> {estoque.baixo.map(b => `${typeLabel(b.type)} (${b.inStock})`).join(', ')}</span>
+          </div>
+        )}
+        {estoque.ultimos.length === 0 ? (
+          <Empty icon={Package} text="Sem movimentações recentes."/>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4">
+            {estoque.ultimos.map((s, i) => (
+              <div key={s._id || i} className="row">
+                <div className="min-w-0">
+                  <p className="row-title">{typeLabel(s.type)} <span className="text-slate-400 font-normal">· {s.condition}</span></p>
+                  <p className="row-sub">{s.location || 'Estoque'} · {formatDate(s.updatedAt).split(' ')[0]}</p>
+                </div>
+                <span className="badge-emerald">{s.quantity}x</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      {/* estilos utilitários locais (linhas das listas) */}
+      <style>{`
+        /* Altura fixa dos painéis (cabe ~8 cards de lab em 2 linhas de 4) */
+        .noc-fixed{height:440px;}
+        @media (max-width: 1280px){ .noc-fixed{height:auto;min-height:300px;} }
+        .row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:10px;}
+        .row:hover{background:rgb(248 250 252);}
+        .dark .row:hover{background:rgb(30 41 59 / .5);}
+        .row-title{font-size:13px;font-weight:600;color:rgb(30 41 59);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .dark .row-title{color:rgb(241 245 249);}
+        .row-sub{font-size:11px;color:rgb(100 116 139);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .badge-rose{font-size:11px;font-weight:700;color:rgb(225 29 72);background:rgb(254 226 226);padding:2px 8px;border-radius:999px;white-space:nowrap;}
+        .dark .badge-rose{background:rgb(159 18 57 / .3);color:rgb(253 164 175);}
+        .badge-amber{font-size:11px;font-weight:700;color:rgb(217 119 6);background:rgb(254 243 199);padding:2px 8px;border-radius:999px;white-space:nowrap;}
+        .dark .badge-amber{background:rgb(146 64 14 / .3);color:rgb(252 211 77);}
+        .badge-emerald{font-size:11px;font-weight:700;color:rgb(5 150 105);background:rgb(209 250 229);padding:2px 8px;border-radius:999px;white-space:nowrap;}
+        .dark .badge-emerald{background:rgb(6 78 59 / .4);color:rgb(110 231 183);}
+      `}</style>
     </div>
   );
+}
+
+// ============== Subcomponentes ==============
+function Kpi({ icon: Icon, label, value, color, sub, to, pulse }) {
+  return (
+    <Link to={to || '#'}
+      className="group relative card !p-3 flex items-center gap-3 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
+      <div className={`w-10 h-10 rounded-lg grid place-items-center shrink-0
+        bg-${color}-100 text-${color}-700 dark:bg-${color}-900/30 dark:text-${color}-300`}>
+        <Icon size={18}/>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold truncate">{label}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-white leading-tight flex items-center gap-1">
+          {value}
+          {pulse && <span className={`w-1.5 h-1.5 rounded-full bg-${color}-500 animate-pulse`}/>}
+        </p>
+        {sub && <p className="text-[10px] text-slate-400">{sub}</p>}
+      </div>
+      <ArrowUpRight size={14} className="absolute top-2 right-2 text-slate-300 opacity-0 group-hover:opacity-100 transition"/>
+    </Link>
+  );
+}
+
+// Cor de cada estação no mini-mapa (igual à página do laboratório)
+const STATION_DOT = {
+  funcionando: 'bg-emerald-500',
+  manutencao: 'bg-amber-500',
+  defeito: 'bg-rose-500',
+  sem_equipamento: 'bg-slate-300 dark:bg-slate-600',
+};
+
+// Card de laboratório no mapa do dashboard — quadrado, com mini-mapa de PCs
+function LabMiniCard({ lab }) {
+  const h = HEALTH[lab.health] || HEALTH.ok;
+  const cells = lab.stations || [];
+  // colunas do mini-mapa conforme a quantidade (mantém quadradinhos)
+  const cols = cells.length <= 4 ? 4 : cells.length <= 9 ? 5 : cells.length <= 16 ? 6 : 8;
+  return (
+    <Link to={`/laboratorios/${lab._id}`}
+      className="group relative flex flex-col rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
+      <span className={`absolute top-0 left-0 right-0 h-1 ${h.cell}`}/>
+      <div className="flex items-center gap-1.5 mt-1">
+        <span className={`w-2 h-2 rounded-full ${h.cell} ${lab.health !== 'ok' ? 'animate-pulse' : ''}`}/>
+        <p className="font-semibold text-[13px] text-slate-800 dark:text-white truncate">{lab.name}</p>
+      </div>
+      <p className="text-[10px] text-slate-500 truncate">{lab.school}</p>
+
+      {/* mini-mapa dos PCs */}
+      <div className="my-2 flex-1 flex items-center">
+        {cells.length === 0 ? (
+          <span className="text-[10px] text-slate-400 italic">sem estações</span>
+        ) : (
+          <div className="grid gap-1 w-full" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+            {cells.map((s, i) => (
+              <span key={i} title={s.code}
+                className={`aspect-square rounded-[3px] ${STATION_DOT[s.status] || STATION_DOT.sem_equipamento}`}/>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 text-[10px]">
+        <span className="inline-flex items-center gap-0.5 text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>{lab.active}</span>
+        <span className="inline-flex items-center gap-0.5 text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"/>{lab.maintenance}</span>
+        <span className="inline-flex items-center gap-0.5 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500"/>{lab.defective}</span>
+        <span className="ml-auto text-slate-400">{lab.total} PCs</span>
+      </div>
+    </Link>
+  );
+}
+
+function Panel({ title, icon: Icon, children, count, accent = 'slate', to, className = '' }) {
+  const accentText = {
+    slate: 'text-slate-500', rose: 'text-rose-500', orange: 'text-orange-500',
+  }[accent] || 'text-slate-500';
+  return (
+    <section className={`card p-4 ${className}`}>
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          {Icon && <Icon size={17} className={accentText}/>} {title}
+          {count !== undefined && (
+            <span className="text-[11px] font-normal text-slate-400">({count})</span>
+          )}
+        </h3>
+        {to && (
+          <Link to={to} className="text-xs text-brand-600 hover:underline flex items-center gap-0.5">
+            ver todas <ChevronRight size={12}/>
+          </Link>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Legend({ dot, label }) {
+  return <span className="inline-flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded ${dot}`}/> {label}</span>;
+}
+
+function Empty({ icon: Icon, text }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+      <Icon size={28} className="mb-2 opacity-50"/>
+      <p className="text-sm">{text}</p>
+    </div>
+  );
+}
+
+function OsStatus({ status }) {
+  const map = {
+    aberta: ['Aberta', 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'],
+    em_andamento: ['Andamento', 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'],
+    aguardando_peca: ['Aguard. peça', 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'],
+    finalizada: ['Finalizada', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'],
+    entregue: ['Entregue', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'],
+    cancelada: ['Cancelada', 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'],
+  };
+  const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-600'];
+  return <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${cls}`}>{label}</span>;
 }

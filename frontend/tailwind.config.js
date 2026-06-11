@@ -18,6 +18,10 @@ export default {
     'bg-violet-100','text-violet-700','dark:bg-violet-900/30','dark:text-violet-300',
     'bg-blue-100','text-blue-700','dark:bg-blue-900/30','dark:text-blue-300',
     'bg-orange-100','text-orange-700','dark:bg-orange-900/30','dark:text-orange-300',
+    // variantes extras usadas no Dashboard NOC (MiniStat / pulse)
+    'bg-sky-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-indigo-500','bg-orange-500',
+    'bg-sky-50/40','bg-emerald-50/40','bg-amber-50/40','bg-rose-50/40','bg-indigo-50/40','bg-orange-50/40',
+    'dark:bg-sky-900/10','dark:bg-emerald-900/10','dark:bg-amber-900/10','dark:bg-rose-900/10','dark:bg-indigo-900/10','dark:bg-orange-900/10',
   ],
   theme: {
     extend: {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Pencil, Trash2, FlaskConical, Package,
   CheckCircle2, Hammer, Calendar, ArrowLeftCircle, Monitor, Laptop, Printer,
@@ -43,7 +44,7 @@ const KIND_COLOR = {
   administrativo: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 };
 const KIND_ICON = {
-  laboratorio: Monitor,
+  laboratorio: FlaskConical,
   administrativo: Briefcase,
 };
 
@@ -109,6 +110,7 @@ export function computeComputerStatus(lab) {
 
 export default function Laboratories() {
   const { hasRole } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = hasRole('admin');
   const canInspect = hasRole('admin', 'tecnico');
 
@@ -175,6 +177,33 @@ export default function Laboratories() {
     }
   }
 
+  async function downloadLabReport() {
+    const loadingId = toast.loading('Gerando relatório...');
+    try {
+      const token = localStorage.getItem('os_token');
+      const params = new URLSearchParams(
+        Object.entries(filters).filter(([, v]) => v !== '')
+      ).toString();
+      const res = await fetch(
+        `${api.defaults.baseURL}/reports/laboratories/excel${params ? '?' + params : ''}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Falha ao gerar relatório');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `laboratorios-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.dismiss(loadingId);
+      toast.success('Relatório baixado');
+    } catch (err) {
+      toast.dismiss(loadingId);
+      toast.error(err.message || 'Erro ao gerar relatório');
+    }
+  }
+
   async function remove(lab) {
     if (!confirm(`Excluir o laboratório "${lab.name}"?\n\nOs equipamentos serão devolvidos ao estoque.`)) return;
     try {
@@ -195,22 +224,27 @@ export default function Laboratories() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Monitor className="text-brand-600" size={26}/>
+            <FlaskConical className="text-brand-600" size={26}/>
             Laboratórios e Setores Administrativos
           </h1>
           <p className="text-sm text-slate-500">
             Cada novo cadastro debita automaticamente os equipamentos do estoque.
           </p>
         </div>
-        <button onClick={() => { setEditing(null); setOpen(true); }} className="btn-primary">
-          <Plus size={16}/> Novo Laboratório/Administrativo
-        </button>
+        <div className="flex gap-2">
+          <button onClick={downloadLabReport} className="btn-secondary">
+            <Package size={16}/> Relatório (Excel)
+          </button>
+          <button onClick={() => { setEditing(null); setOpen(true); }} className="btn-primary">
+            <Plus size={16}/> Novo Laboratório/Administrativo
+          </button>
+        </div>
       </div>
 
       {/* Cards de resumo */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total" value={summary.total} color="brand" icon={Monitor}
+          <StatCard label="Total" value={summary.total} color="brand" icon={FlaskConical}
             onClick={() => setFilters({ q: '', status: '' })}/>
           <StatCard label="Concluídos" value={summary.concluidos} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, status: 'concluido', page: 1 }))}/>
@@ -243,7 +277,7 @@ export default function Laboratories() {
           <section className="lg:col-span-7 card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Monitor size={18} className="text-indigo-600"/>
+                <FlaskConical size={18} className="text-indigo-600"/>
                 Laboratórios de Informática
                 <span className="text-xs font-normal text-slate-400">({labItems.length})</span>
               </h2>
@@ -257,7 +291,7 @@ export default function Laboratories() {
                 {labItems.map(lab => (
                   <LabMapCard key={lab._id} lab={lab}
                     isAdmin={isAdmin}
-                    onOpen={() => setDetailing(lab)}
+                    onOpen={() => navigate(`/laboratorios/${lab._id}`)}
                     onRemove={() => remove(lab)}/>
                 ))}
               </div>
@@ -335,7 +369,7 @@ function LabMapCard({ lab, isAdmin, onOpen, onRemove }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <Monitor size={16} className="text-indigo-600 shrink-0"/>
+              <FlaskConical size={16} className="text-indigo-600 shrink-0"/>
               <h3 className="font-bold text-slate-900 dark:text-white truncate">{lab.name}</h3>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5" title={lab.school?.name || ''}>

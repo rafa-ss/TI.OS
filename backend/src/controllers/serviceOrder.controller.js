@@ -7,9 +7,11 @@ const { getPagination, paginate } = require('../utils/paginate');
 const storageService = require('../services/storage.service');
 const notificationService = require('../services/notification.service');
 const orderPdfService = require('../services/orderPdf.service');
+const labOrderService = require('../services/labOrder.service');
 
 const populateRefs = [
   { path: 'school', select: 'name inep municipio' },
+  { path: 'laboratory', select: 'name kind' },
   { path: 'equipment', select: 'patrimonio type brand model' },
   { path: 'technician', select: 'name email role avatarUrl' },
   { path: 'helpers', select: 'name email role avatarUrl' },
@@ -70,8 +72,9 @@ function applyRoleFilter(filter, user) {
 // ===== endpoints =====
 
 exports.list = asyncHandler(async (req, res) => {
-  const { q, status, priority, school, technician, inep, patrimonio, late, from, to } = req.query;
+  const { q, status, priority, school, technician, inep, patrimonio, late, from, to, laboratory } = req.query;
   const filter = {};
+  if (laboratory) filter.laboratory = laboratory;
 
   if (q) {
     filter.$or = [
@@ -103,12 +106,88 @@ exports.list = asyncHandler(async (req, res) => {
   // Filtro de visibilidade por perfil
   applyRoleFilter(filter, req.user);
 
-  // Ordenação padrão: data de abertura mais recente primeiro.
-  // O usuário ainda pode sobrescrever passando ?sort=... &order=asc|desc na query.
+  // Ordenação padrão: pelo NÚMERO da O.S. (mais recente primeiro).
+  // Como o número é uma string "NN/AAAA", ordenar como texto seria incorreto
+  // (ex.: "10/2026" viria antes de "2/2026"). Por isso usamos uma aggregation
+  // que extrai ANO e SEQUÊNCIA numéricos e ordena por eles.
+  // O usuário ainda pode sobrescrever passando ?sort=...&order=asc|desc.
+  const wantsNumberSort = !req.query.sort || req.query.sort === 'number';
+  const order = req.query.order === 'asc' ? 1 : -1;
+
+  if (wantsNumberSort) {
+    const data = await listSortedByNumber(filter, req.query, order);
+    return res.json({ success: true, ...data });
+  }
+
+  // Demais campos de ordenação seguem o caminho simples (paginate padrão).
   const pagination = getPagination({ sort: 'openedAt', order: 'desc', ...req.query });
   const data = await paginate(ServiceOrder, filter, pagination, populateRefs);
   res.json({ success: true, ...data });
 });
+
+/**
+ * Lista as O.S. ordenadas pelo NÚMERO (ano + sequência, numéricos), com
+ * paginação e populate. Usa aggregation para parsear "NN/AAAA" corretamente.
+ *
+ * @param {object} filter   filtro Mongo já montado (com role filter aplicado)
+ * @param {object} query    req.query (para page/limit)
+ * @param {number} order    1 (asc) ou -1 (desc)
+ */
+async function listSortedByNumber(filter, query, order) {
+  const page = Math.max(parseInt(query.page || '1', 10), 1);
+  const limit = Math.min(Math.max(parseInt(query.limit || '10', 10), 1), 100);
+  const skip = (page - 1) * limit;
+
+  // Campos numéricos derivados de "number" = "NN/AAAA"
+  const addParsed = {
+    $addFields: {
+      _numParts: { $split: [{ $ifNull: ['$number', ''] }, '/'] },
+    },
+  };
+  const addYearSeq = {
+    $addFields: {
+      _seq: {
+        $convert: {
+          input: { $arrayElemAt: ['$_numParts', 0] },
+          to: 'int', onError: 0, onNull: 0,
+        },
+      },
+      _year: {
+        $convert: {
+          input: { $arrayElemAt: ['$_numParts', 1] },
+          to: 'int', onError: 0, onNull: 0,
+        },
+      },
+    },
+  };
+
+  const [items, totalAgg] = await Promise.all([
+    ServiceOrder.aggregate([
+      { $match: filter },
+      addParsed,
+      addYearSeq,
+      { $sort: { _year: order, _seq: order, _id: order } },
+      { $skip: skip },
+      { $limit: limit },
+      { $project: { _numParts: 0, _seq: 0, _year: 0 } },
+    ]),
+    ServiceOrder.aggregate([{ $match: filter }, { $count: 'total' }]),
+  ]);
+
+  // Reidrata os refs (aggregation não popula sozinha)
+  const populated = await ServiceOrder.populate(items, populateRefs);
+  const total = totalAgg[0]?.total || 0;
+
+  return {
+    items: populated,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+}
 
 exports.get = asyncHandler(async (req, res) => {
   const os = await ServiceOrder.findById(req.params.id).populate(populateRefs);
@@ -150,6 +229,10 @@ exports.create = asyncHandler(async (req, res) => {
   const body = await resolveSchoolAndEquipment({ ...req.body });
   body.createdBy = req.user._id;
 
+  // ===== Campos de Laboratório (OS de manutenção de laboratório) =====
+  const labFields = await labOrderService.normalizeLabFields(body);
+  Object.assign(body, labFields);
+
   // ===== Campos especiais de MIGRAÇÃO — só admin pode passar =====
   const isMigration = req.user.role === 'admin' &&
     (body.number || body.openedAt || body.closedAt || (body.status && body.status !== 'aberta'));
@@ -180,6 +263,9 @@ exports.create = asyncHandler(async (req, res) => {
   }];
 
   const os = await ServiceOrder.create(body);
+
+  // Efeitos no laboratório (marca estações em manutenção + histórico)
+  await labOrderService.onOrderOpened(os, req.user);
 
   await notificationService.notifyRoles(['admin', 'tecnico'], {
     title: `Nova O.S. aberta ${os.number}`,
@@ -228,6 +314,12 @@ exports.update = asyncHandler(async (req, res) => {
   }
 
   const body = await resolveSchoolAndEquipment({ ...req.body });
+
+  // ===== Campos de Laboratório (se a OS referenciar um laboratório) =====
+  if (body.laboratory !== undefined) {
+    const labFields = await labOrderService.normalizeLabFields(body);
+    Object.assign(body, labFields);
+  }
 
   // ===== Campos de migração — só admin pode alterar =====
   if (req.user.role !== 'admin') {
@@ -338,6 +430,18 @@ exports.changeStatus = asyncHandler(async (req, res) => {
     os.diagnosis = diagnosis;
   }
 
+  // Permite registrar os checklists no momento da finalização
+  if (status === 'finalizada') {
+    if (Array.isArray(req.body.preventiveChecklist)) {
+      os.preventiveChecklist = req.body.preventiveChecklist
+        .filter(i => ServiceOrder.PREVENTIVE_ITEMS.includes(i));
+    }
+    if (Array.isArray(req.body.correctiveChecklist)) {
+      os.correctiveChecklist = req.body.correctiveChecklist
+        .filter(i => ServiceOrder.CORRECTIVE_ITEMS.includes(i));
+    }
+  }
+
   os.history.push({
     user: req.user._id, action: 'status_changed', field: 'status',
     from: os.status, to: status, note,
@@ -347,6 +451,11 @@ exports.changeStatus = asyncHandler(async (req, res) => {
   if (status === 'entregue') os.deliveredAt = new Date();
 
   await os.save();
+
+  // Efeitos no laboratório quando a OS de lab é concluída
+  if (status === 'finalizada') {
+    await labOrderService.onOrderCompleted(os, req.user);
+  }
 
   if (status === 'finalizada' && os.equipment) {
     await Equipment.findByIdAndUpdate(os.equipment, {
