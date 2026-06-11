@@ -103,7 +103,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-300 font-semibold flex items-center gap-1.5">
-              <ShieldCheck size={14}/> Centro de Operações · Tecnologia Educacional
+              <ShieldCheck size={14}/> Coordenação de Tecnologia Educacional
             </p>
             <h1 className="text-2xl font-bold mt-1">{greeting()}, {firstName} 👋</h1>
             <p className="text-sm text-slate-300 mt-0.5">
@@ -129,25 +129,14 @@ export default function Dashboard() {
       {/* ===== Faixa de KPIs (misto: laboratórios + O.S.) ===== */}
       <div>
         <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
-          <FlaskConical size={13}/> Laboratórios
+          <Monitor size={13}/> Laboratórios
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-          <Kpi to="/laboratorios" icon={FlaskConical} color="indigo" label="Labs ativos" value={labs.ativos}/>
+          <Kpi to="/laboratorios" icon={Monitor} color="indigo" label="Labs ativos" value={labs.ativos}/>
           <Kpi to="/laboratorios" icon={XCircle} color="rose" label="Com defeito" value={labs.comDefeito} pulse={labs.comDefeito > 0}/>
           <Kpi to="/laboratorios" icon={CalendarClock} color="orange" label="Preventiva devida" value={labs.preventivaDevida} pulse={labs.preventivaDevida > 0}/>
           <Kpi to="/laboratorios" icon={Eye} color="amber" label="Sem vistoria" value={labs.semVistoria}/>
           <Kpi to="/equipamentos" icon={Boxes} color="emerald" label="Estoque" value={estoque.total} sub="unidades"/>
-        </div>
-      </div>
-      <div>
-        <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
-          <ClipboardList size={13}/> Ordens de Serviço
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Kpi to="/ordens?status=aberta" icon={ClipboardList} color="sky" label="Abertas" value={os.abertas}/>
-          <Kpi to="/ordens?status=em_andamento" icon={Activity} color="amber" label="Em andamento" value={os.emAndamento}/>
-          <Kpi to="/ordens" icon={Clock} color="rose" label="Atrasadas" value={os.atrasadas} pulse={os.atrasadas > 0}/>
-          <Kpi to="/ordens?status=finalizada" icon={CheckCircle2} color="emerald" label="Finalizadas (mês)" value={os.finalizadasMes}/>
         </div>
       </div>
 
@@ -158,7 +147,7 @@ export default function Dashboard() {
           <Panel title="Mapa dos Laboratórios" icon={Monitor} count={labs.mapa.length} to="/laboratorios"
             className="noc-fixed flex flex-col">
             {labs.mapa.length === 0 ? (
-              <Empty icon={FlaskConical} text="Nenhum laboratório cadastrado."/>
+              <Empty icon={Monitor} text="Nenhum laboratório cadastrado."/>
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 flex-1 content-start">
@@ -203,10 +192,15 @@ export default function Dashboard() {
 
       {/* ===== Linha 2: Últimas O.S. (80%) + Mensagens (20%) — mesma altura fixa ===== */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+
+        {/* Mensagens recentes (chat da equipe) — 20% */}
+        <div className="h-[350px]">
+          <RecentMessagesCard />
+        </div>
         {/* Últimas Ordens de Serviço — 80% */}
         <div className="xl:col-span-4">
           <Panel title="Últimas Ordens de Serviço" icon={ClipboardList} to="/ordens"
-            className="noc-fixed flex flex-col">
+            className="h-[350px] flex flex-col">
             {os.ultimas.length === 0 ? (
               <Empty icon={ClipboardList} text="Nenhuma O.S. registrada."/>
             ) : (
@@ -240,11 +234,6 @@ export default function Dashboard() {
               </div>
             )}
           </Panel>
-        </div>
-
-        {/* Mensagens recentes (chat da equipe) — 20% */}
-        <div className="noc-fixed">
-          <RecentMessagesCard />
         </div>
       </div>
 

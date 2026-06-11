@@ -44,7 +44,7 @@ const KIND_COLOR = {
   administrativo: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 };
 const KIND_ICON = {
-  laboratorio: FlaskConical,
+  laboratorio: Monitor,
   administrativo: Briefcase,
 };
 
@@ -224,7 +224,7 @@ export default function Laboratories() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <FlaskConical className="text-brand-600" size={26}/>
+            <Monitor className="text-brand-600" size={26}/>
             Laboratórios e Setores Administrativos
           </h1>
           <p className="text-sm text-slate-500">
@@ -244,7 +244,7 @@ export default function Laboratories() {
       {/* Cards de resumo */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total" value={summary.total} color="brand" icon={FlaskConical}
+          <StatCard label="Total" value={summary.total} color="brand" icon={Monitor}
             onClick={() => setFilters({ q: '', status: '' })}/>
           <StatCard label="Concluídos" value={summary.concluidos} color="emerald" icon={CheckCircle2}
             onClick={() => setFilters(f => ({ ...f, status: 'concluido', page: 1 }))}/>
@@ -277,7 +277,7 @@ export default function Laboratories() {
           <section className="lg:col-span-7 card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <FlaskConical size={18} className="text-indigo-600"/>
+                <Monitor size={18} className="text-indigo-600"/>
                 Laboratórios de Informática
                 <span className="text-xs font-normal text-slate-400">({labItems.length})</span>
               </h2>
@@ -369,7 +369,7 @@ function LabMapCard({ lab, isAdmin, onOpen, onRemove }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <FlaskConical size={16} className="text-indigo-600 shrink-0"/>
+              <Monitor size={16} className="text-indigo-600 shrink-0"/>
               <h3 className="font-bold text-slate-900 dark:text-white truncate">{lab.name}</h3>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5" title={lab.school?.name || ''}>
@@ -500,7 +500,7 @@ function LabDetailModal({ lab, onClose, isAdmin, canInspect, onPrint, onEdit, on
 
   if (!lab) return null;
   const kind = lab.kind || 'laboratorio';
-  const KindIcon = KIND_ICON[kind] || FlaskConical;
+  const KindIcon = KIND_ICON[kind] || Monitor;
   const totalEq = (lab.equipments || []).reduce((a, e) => a + e.quantity, 0);
   const active = !lab.returnedToStock && lab.status !== 'desativado';
   const isLab = kind === 'laboratorio';
@@ -1134,7 +1134,7 @@ function LabForm({ open, onClose, lab, onSaved, isAdmin }) {
           <div className="grid grid-cols-2 gap-3">
             <KindCard
               active={form.kind === 'laboratorio'}
-              icon={FlaskConical}
+              icon={Monitor}
               title="Laboratório de Informática"
               description="Sala equipada para uso pedagógico (alunos)"
               color="indigo"

@@ -132,7 +132,7 @@ export default function LaboratoryDetail() {
           <ArrowLeft size={18}/> Voltar
         </button>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <FlaskConical className="text-indigo-600" size={24}/> {lab.name}
+          <Monitor className="text-indigo-600" size={24}/> {lab.name}
         </h1>
         {lab.deliveryTermNumber && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
