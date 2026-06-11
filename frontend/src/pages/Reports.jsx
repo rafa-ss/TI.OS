@@ -207,15 +207,6 @@ export default function Reports() {
 
       {loading || !analytics ? <PageLoader /> : (
         <>
-        {/* ===== Seção 6 — Respaldo para Ponto (atividades externas) ===== */}
-          <PontoSection
-            show={showPonto}
-            onToggle={() => setShowPonto((s) => !s)}
-            isAdmin={isAdmin}
-            user={user}
-            staff={staff}
-            range={{ from: filters.from, to: filters.to }}
-          />
           {/* ===== Indicadores Gerais (KPIs) ===== */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <Kpi label="Total de O.S." value={analytics.kpis.totalOrders} color="brand" icon={ClipboardList} />
@@ -401,7 +392,15 @@ export default function Reports() {
             <Pagination page={history.page} totalPages={history.totalPages} onChange={setHistPage} />
           </div>
 
-          
+          {/* ===== Seção 6 — Respaldo para Ponto (atividades externas) ===== */}
+          <PontoSection
+            show={showPonto}
+            onToggle={() => setShowPonto((s) => !s)}
+            isAdmin={isAdmin}
+            user={user}
+            staff={staff}
+            range={{ from: filters.from, to: filters.to }}
+          />
         </>
       )}
     </div>
