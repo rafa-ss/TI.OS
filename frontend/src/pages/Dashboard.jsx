@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   FlaskConical, XCircle, CalendarClock, Eye, Package, PackageMinus,
   ClipboardList, Clock, Activity, CheckCircle2, AlertTriangle, Bell, ArrowUpRight,
-  Boxes, Monitor, ChevronRight, Loader2, ShieldCheck, RefreshCw, Layers,
+  Boxes, Monitor, ChevronRight, Loader2, ShieldCheck, RefreshCw, Layers, AlertCircle,
 } from 'lucide-react';
 import api from '../services/api';
 import { formatDate, SERVICE_TYPE_LABEL, typeLabel } from '../utils/format';
@@ -47,13 +47,18 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [error, setError] = useState(null);
 
   async function load(silent = false) {
     if (silent) setRefreshing(true); else setLoading(true);
     try {
       const r = await api.get('/dashboard/noc');
       setD(r.data.data);
-    } catch { /* noop */ }
+      setError(null);
+    } catch (err) {
+      console.error('Dashboard load error:', err?.response?.data || err.message);
+      setError(err?.response?.data?.message || err.message || 'Erro desconhecido');
+    }
     finally { setLoading(false); setRefreshing(false); }
   }
 
@@ -69,7 +74,23 @@ export default function Dashboard() {
   if (loading) {
     return <div className="flex items-center justify-center py-24 text-slate-400"><Loader2 className="animate-spin mr-2"/> Carregando painel...</div>;
   }
-  if (!d) return <p className="text-slate-500">Falha ao carregar o painel.</p>;
+  if (!d) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <AlertTriangle className="w-12 h-12 text-amber-500 mb-4" />
+      <p className="text-slate-600 dark:text-slate-300 font-medium mb-2">Falha ao carregar o painel</p>
+      {error && (
+        <p className="text-sm text-slate-400 max-w-md bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
+          {error}
+        </p>
+      )}
+      <button 
+        onClick={() => load()} 
+        className="mt-4 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  );
 
   const { labs, estoque, os, alertas } = d;
   const firstName = (user?.name || '').split(' ')[0] || 'Equipe';
