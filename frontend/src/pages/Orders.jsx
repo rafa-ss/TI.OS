@@ -169,7 +169,7 @@ export default function Orders() {
               : 'Acompanhe, abra e atualize chamados.'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button className="btn-secondary" onClick={() => exportFile('excel')}><FileDown size={16}/> Excel</button>
           <button className="btn-secondary" onClick={() => exportFile('pdf')}><FileText size={16}/> PDF</button>
           {hasRole('admin') && (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Send, Users, Search } from 'lucide-react';
+import { MessageCircle, Send, Users, Search, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 import Avatar from '../components/Avatar';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +28,9 @@ export default function Chat() {
   const navigate = useNavigate();
   // Pega o contato vindo de outra tela (ex.: clicou em "Mensagens recentes" no dashboard)
   const [active, setActive] = useState(location.state?.activeContact || 'general');
+  // No celular: controla se mostramos a lista de contatos (false) ou a conversa (true)
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  function openConversation(id) { setActive(id); setMobileChatOpen(true); }
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
@@ -102,8 +105,8 @@ export default function Chat() {
 
   return (
     <div className="card overflow-hidden h-[calc(100vh-140px)] flex">
-      {/* Sidebar de contatos */}
-      <aside className="w-72 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+      {/* Sidebar de contatos — no celular some quando uma conversa está aberta */}
+      <aside className={`${mobileChatOpen ? 'hidden' : 'flex'} md:flex w-full md:w-72 border-r border-slate-200 dark:border-slate-800 flex-col`}>
         <div className="p-3 border-b border-slate-200 dark:border-slate-800">
           <h2 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-2">
             <MessageCircle size={18} className="text-pref-azul-600"/> Chat da equipe
@@ -124,7 +127,7 @@ export default function Chat() {
             active={active === 'general'}
             iconColor="bg-pref-vermelho-500"
             isGeneral
-            onClick={() => setActive('general')}
+            onClick={() => openConversation('general')}
           />
 
           {/* Lista de pessoas */}
@@ -140,7 +143,7 @@ export default function Chat() {
                 : c.role === 'tecnico' ? 'bg-pref-azul-500'
                 : 'bg-pref-amarelo-500'
               }
-              onClick={() => setActive(c._id)}
+              onClick={() => openConversation(c._id)}
             />
           ))}
           {filtered.length === 0 && (
@@ -149,10 +152,13 @@ export default function Chat() {
         </div>
       </aside>
 
-      {/* Área de mensagens */}
-      <section className="flex-1 flex flex-col min-w-0">
+      {/* Área de mensagens — no celular só aparece quando uma conversa está aberta */}
+      <section className={`${mobileChatOpen ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0`}>
         {/* Header da conversa */}
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+        <div className="px-3 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 sm:gap-3">
+          <button onClick={() => setMobileChatOpen(false)} className="md:hidden btn-ghost p-1.5 shrink-0" title="Voltar">
+            <ArrowLeft size={20} />
+          </button>
           {active === 'general'
             ? <div className="w-9 h-9 rounded-full bg-pref-vermelho-500 text-white flex items-center justify-center font-bold">
                 {(activeContact?.name || '?').charAt(0).toUpperCase()}

@@ -56,6 +56,7 @@ export default function Users() {
 
       <div className="card overflow-hidden">
         {loading ? <TableSkeleton/> : (
+          <div className="overflow-x-auto">
           <table className="table-modern">
             <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
             <tbody>
@@ -73,6 +74,7 @@ export default function Users() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         <Pagination page={pagination.page} totalPages={pagination.totalPages} onChange={p => setFilters(f => ({ ...f, page: p }))}/>
       </div>
