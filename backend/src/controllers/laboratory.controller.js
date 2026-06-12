@@ -41,7 +41,28 @@ exports.list = asyncHandler(async (req, res) => {
   if (school) filter.school = school;
   if (kind) filter.kind = kind; // 'laboratorio' | 'administrativo'
 
-  // Ordem alfabética por nome (padrão). Sobrescrevível via ?sort=&order=.
+  // Ordenação:
+  //  - sort=term  → ÚLTIMO termo de entrega no topo (mais recente primeiro),
+  //                 ordenado por data de montagem desc (createdAt como desempate).
+  //  - padrão     → alfabética por nome. Sobrescrevível via ?sort=&order=.
+  if (req.query.sort === 'term') {
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '10', 10), 1), 200);
+    const skip = (page - 1) * limit;
+    const sort = { assemblyDate: -1, createdAt: -1, _id: -1 };
+
+    const [items, total] = await Promise.all([
+      Laboratory.find(filter).sort(sort).skip(skip).limit(limit).populate(populateRefs),
+      Laboratory.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      items,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+    });
+  }
+
   const pagination = getPagination({ sort: 'name', order: 'asc', ...req.query });
   const data = await paginate(Laboratory, filter, pagination, populateRefs);
   res.json({ success: true, ...data });

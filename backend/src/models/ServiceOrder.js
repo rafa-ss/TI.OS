@@ -164,6 +164,18 @@ serviceOrderSchema.virtual('isLate').get(function () {
 serviceOrderSchema.set('toJSON', { virtuals: true });
 serviceOrderSchema.set('toObject', { virtuals: true });
 
+// Prazo padrão de vencimento: 1 SEMANA após a abertura.
+// Se a O.S. for nova e não tiver dueDate informado, define openedAt + 7 dias.
+// Assim O.S. em aberto passam a "vencer" automaticamente e aparecem nos
+// alertas de atrasadas quando passam de 7 dias sem conclusão.
+serviceOrderSchema.pre('save', function (next) {
+  if (this.isNew && !this.dueDate) {
+    const base = this.openedAt ? new Date(this.openedAt) : new Date();
+    this.dueDate = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
+  }
+  next();
+});
+
 serviceOrderSchema.pre('save', async function (next) {
   if (this.isNew && !this.number) {
     const year = new Date().getFullYear();

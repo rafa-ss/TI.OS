@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Plus, Search, Pencil, Trash2, Package, Wrench, CheckCircle2,
+  Plus, Search, Pencil, Trash2, Package, Wrench, CheckCircle2, Boxes,
   Monitor, Laptop, Printer, Wifi, Battery, Tablet, HelpCircle, Minus, Mouse, Keyboard, Cable, MemoryStick, Plug, Power
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import api from '../services/api';
 import { TableSkeleton } from '../components/Loading';
 import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
+import Kits from './Kits';
 import { EQUIPMENT_TYPE_LABEL, typeLabel } from '../utils/format';
 
 const TYPES = [
@@ -40,6 +41,7 @@ const TYPE_ICONS = {
 };
 
 export default function Equipment() {
+  const [tab, setTab] = useState('equipamentos'); // 'equipamentos' | 'kits'
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ q: '', type: '', condition: '' });
@@ -87,6 +89,32 @@ export default function Equipment() {
 
   return (
     <div className="space-y-4">
+      {/* Abas: Equipamentos | Kits */}
+      <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setTab('equipamentos')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === 'equipamentos'
+              ? 'border-brand-600 text-brand-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Package size={16}/> Equipamentos
+        </button>
+        <button
+          onClick={() => setTab('kits')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === 'kits'
+              ? 'border-brand-600 text-brand-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Boxes size={16}/> Kits
+        </button>
+      </div>
+
+      {tab === 'kits' ? <Kits /> : (
+      <>
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Estoque de Equipamentos</h1>
@@ -201,6 +229,8 @@ export default function Equipment() {
 
       <StockForm open={open} onClose={() => setOpen(false)} item={editing}
         onSaved={() => { setOpen(false); load(); }}/>
+      </>
+      )}
     </div>
   );
 }

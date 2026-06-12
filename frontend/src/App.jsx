@@ -8,7 +8,6 @@ import OrderDetail from './pages/OrderDetail';
 import Equipment from './pages/Equipment';
 import Laboratories from './pages/Laboratories';
 import LaboratoryDetail from './pages/LaboratoryDetail';
-import Kits from './pages/Kits';
 import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import EquipmentDetail from './pages/EquipmentDetail';
@@ -35,7 +34,9 @@ export default function App() {
         <Route path="equipamentos" element={<ProtectedRoute roles={['admin','tecnico']}><Equipment /></ProtectedRoute>} />
         <Route path="laboratorios" element={<ProtectedRoute roles={['admin','tecnico']}><Laboratories /></ProtectedRoute>} />
         <Route path="laboratorios/:id" element={<ProtectedRoute roles={['admin','tecnico']}><LaboratoryDetail /></ProtectedRoute>} />
-        <Route path="kits" element={<ProtectedRoute roles={['admin','tecnico']}><Kits /></ProtectedRoute>} />
+        {/* Kits agora vive dentro da página de Equipamentos (aba). Mantém a rota
+            antiga redirecionando para não quebrar links salvos. */}
+        <Route path="kits" element={<Navigate to="/equipamentos" replace />} />
         <Route path="equipamentos/:id" element={<ProtectedRoute roles={['admin','tecnico']}><EquipmentDetail /></ProtectedRoute>} />
         <Route path="escolas" element={<Schools />} />
         <Route path="chat" element={<Chat />} />

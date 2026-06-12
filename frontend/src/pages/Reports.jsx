@@ -3,6 +3,8 @@ import {
   BarChart3, FileText, FileSpreadsheet, Calendar, User as UserIcon, ClipboardList,
   FlaskConical, School as SchoolIcon, Wrench, CheckCircle2, Clock, Users, Plus,
   Pencil, Trash2, MapPin, Download, RefreshCw, ChevronDown, ChevronUp, Filter, Timer,
+  ChevronLeft, ChevronRight,
+  Monitor,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -51,6 +53,35 @@ const BAR_PALETTE = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function firstDayMonth() { const d = new Date(); d.setMonth(d.getMonth() - 5); d.setDate(1); return d.toISOString().slice(0, 10); }
+
+const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+/**
+ * Monta a série com TODOS os dias de um mês (1..último dia), preenchendo com 0
+ * os dias sem O.S. Os valores vêm de byDay, cujos rótulos são "DD/MM".
+ */
+function buildMonthDays(byDay = [], year, month /* 0-based */) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const mm = String(month + 1).padStart(2, '0');
+  const counts = {};
+  for (const d of byDay) counts[d.label] = d.value; // "DD/MM" -> value
+
+  const out = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const label = `${String(day).padStart(2, '0')}/${mm}`;
+    out.push({ label, value: counts[label] || 0 });
+  }
+  return out;
+}
+
+/** ISO yyyy-mm-dd do primeiro e último dia de um mês. */
+function monthRange(year, month /* 0-based */) {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { from: iso(first), to: iso(last) };
+}
 
 export default function Reports() {
   const { user, hasRole } = useAuth();
@@ -174,7 +205,7 @@ export default function Reports() {
             </select>
           </div>
           <div>
-            <label className="label flex items-center gap-1"><FlaskConical size={13} /> Laboratório</label>
+            <label className="label flex items-center gap-1"><Monitor size={13} /> Laboratório</label>
             <select className="input" value={filters.laboratory} onChange={(e) => setF('laboratory', e.target.value)}>
               <option value="">Todos</option>
               {labs.map((l) => <option key={l._id} value={l._id}>{l.name}</option>)}
@@ -214,7 +245,7 @@ export default function Reports() {
             <Kpi label="Em andamento" value={analytics.kpis.pendentes} color="amber" icon={Clock} />
             <Kpi label="Técnicos ativos" value={analytics.kpis.totalTecnicos} color="indigo" icon={Users} />
             <Kpi label="Escolas" value={analytics.kpis.totalEscolas} color="sky" icon={SchoolIcon} />
-            <Kpi label="Laboratórios" value={analytics.kpis.totalLabs} color="violet" icon={FlaskConical} />
+            <Kpi label="Laboratórios" value={analytics.kpis.totalLabs} color="violet" icon={Monitor} />
           </div>
 
           {/* ===== Seção 1 — Desempenho Operacional ===== */}
@@ -252,20 +283,16 @@ export default function Reports() {
             </ChartCard>
           </div>
 
-          {/* O.S. por semana */}
-          <ChartCard title="O.S. por semana" icon={Calendar}>
-            {analytics.byWeek.length ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={analytics.byWeek} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="value" name="O.S." fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty />}
-          </ChartCard>
+          {/* O.S. por dia — navegável por mês (mostra todos os dias do mês) */}
+          <DailyChart
+            baseFilters={{
+              technician: filters.technician,
+              school: filters.school,
+              laboratory: filters.laboratory,
+              status: filters.status,
+              serviceType: filters.serviceType,
+            }}
+          />
 
           {/* ===== Seção 2 — Tipos de Atendimento ===== */}
           <ChartCard title="Quantidade por Tipo de Serviço" icon={Wrench}>
@@ -339,7 +366,7 @@ export default function Reports() {
               ) : <Empty />}
             </ChartCard>
 
-            <ChartCard title="Laboratórios com mais chamados" icon={FlaskConical}>
+            <ChartCard title="Laboratórios com mais chamados" icon={Monitor}>
               {analytics.byLab.length ? (
                 <ResponsiveContainer width="100%" height={Math.max(200, analytics.byLab.length * 34)}>
                   <BarChart data={analytics.byLab} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
@@ -447,6 +474,82 @@ function ChartCard({ title, icon: Icon, children }) {
 
 function Empty({ text = 'Sem dados para exibir.' }) {
   return <p className="text-sm text-slate-400 text-center py-10">{text}</p>;
+}
+
+// ============================================================
+// Gráfico "O.S. por dia" com navegação por mês (mês atual e anteriores)
+// ============================================================
+function DailyChart({ baseFilters = {} }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth()); // 0-based
+  const [byDay, setByDay] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Não deixa avançar além do mês atual
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+  const goPrev = () => {
+    const d = new Date(year, month - 1, 1);
+    setYear(d.getFullYear()); setMonth(d.getMonth());
+  };
+  const goNext = () => {
+    if (isCurrentMonth) return;
+    const d = new Date(year, month + 1, 1);
+    setYear(d.getFullYear()); setMonth(d.getMonth());
+  };
+
+  useEffect(() => {
+    let cancel = false;
+    setLoading(true);
+    const { from, to } = monthRange(year, month);
+    const params = { from, to };
+    Object.entries(baseFilters).forEach(([k, v]) => { if (v) params[k] = v; });
+
+    api.get('/reports/analytics', { params })
+      .then((r) => { if (!cancel) setByDay(r.data.data?.byDay || []); })
+      .catch(() => { if (!cancel) setByDay([]); })
+      .finally(() => { if (!cancel) setLoading(false); });
+
+    return () => { cancel = true; };
+    // eslint-disable-next-line
+  }, [year, month, JSON.stringify(baseFilters)]);
+
+  const data = buildMonthDays(byDay, year, month);
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <Calendar size={16} className="text-pref-azul-600" /> O.S. por dia
+        </h3>
+        <div className="flex items-center gap-1">
+          <button onClick={goPrev} className="btn-ghost p-1.5" title="Mês anterior"><ChevronLeft size={18} /></button>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 min-w-[140px] text-center">
+            {NOMES_MES[month]} / {year}
+          </span>
+          <button onClick={goNext} disabled={isCurrentMonth}
+            className={`btn-ghost p-1.5 ${isCurrentMonth ? 'opacity-30 cursor-not-allowed' : ''}`} title="Próximo mês">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="h-[240px] flex items-center justify-center text-sm text-slate-400">Carregando...</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} />
+            <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} angle={-90} textAnchor="end" height={42} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Bar dataKey="value" name="O.S." fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
 }
 
 // ============================================================

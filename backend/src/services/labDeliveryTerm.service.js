@@ -86,6 +86,11 @@ async function loadLabData(labId) {
     description: prettyType(eq.type),
     situation: CONDITION_LABEL[eq.condition] || 'Novo',
   }));
+  // Ordena a tabela do termo em ordem alfabética pela descrição (pt-BR,
+  // ignorando acentos/maiúsculas). Vale para o PDF e o DOCX.
+  items.sort((a, b) =>
+    String(a.description).localeCompare(String(b.description), 'pt-BR', { sensitivity: 'base' })
+  );
   return { lab, items };
 }
 

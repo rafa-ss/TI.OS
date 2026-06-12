@@ -45,7 +45,7 @@ async function computeAnalytics(filters = {}) {
     byStatus,
     byType,
     byMonth,
-    byWeek,
+    byDay,
     byTechnician,
     bySchool,
     byLab,
@@ -94,17 +94,21 @@ async function computeAnalytics(filters = {}) {
       { $sort: { '_id.y': 1, '_id.m': 1 } },
     ]),
 
-    // O.S. por semana ISO (linha/barra)
+    // O.S. por dia (distribuição diária dentro do período filtrado)
     ServiceOrder.aggregate([
       { $match: match },
       {
         $group: {
-          _id: { y: { $isoWeekYear: '$openedAt' }, w: { $isoWeek: '$openedAt' } },
+          _id: {
+            y: { $year: '$openedAt' },
+            m: { $month: '$openedAt' },
+            d: { $dayOfMonth: '$openedAt' },
+          },
           value: { $sum: 1 },
         },
       },
-      { $sort: { '_id.y': 1, '_id.w': 1 } },
-      { $limit: 26 },
+      { $sort: { '_id.y': 1, '_id.m': 1, '_id.d': 1 } },
+      { $limit: 120 },
     ]),
 
     // Ranking de técnicos
@@ -178,7 +182,10 @@ async function computeAnalytics(filters = {}) {
       label: `${MESES[(m._id.m || 1) - 1]}/${String(m._id.y).slice(2)}`,
       value: m.value,
     })),
-    byWeek: byWeek.map((w) => ({ label: `S${w._id.w}/${String(w._id.y).slice(2)}`, value: w.value })),
+    byDay: byDay.map((d) => ({
+      label: `${String(d._id.d).padStart(2, '0')}/${String(d._id.m).padStart(2, '0')}`,
+      value: d.value,
+    })),
     byTechnician,
     bySchool,
     byLab,

@@ -129,9 +129,10 @@ export default function Laboratories() {
     setLoading(true);
     try {
       const base = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ''));
+      // sort=term → último termo de entrega (montagem mais recente) sempre no topo
       const [labs, admins, sum] = await Promise.all([
-        api.get('/laboratories', { params: { ...base, kind: 'laboratorio', limit: 200 } }),
-        api.get('/laboratories', { params: { ...base, kind: 'administrativo', limit: 200 } }),
+        api.get('/laboratories', { params: { ...base, kind: 'laboratorio', sort: 'term', limit: 200 } }),
+        api.get('/laboratories', { params: { ...base, kind: 'administrativo', sort: 'term', limit: 200 } }),
         api.get('/laboratories/summary'),
       ]);
       setLabItems(labs.data.items);
@@ -312,7 +313,7 @@ export default function Laboratories() {
               <EmptyState title="Nenhum setor"
                 description="Cadastre um Setor Administrativo."/>
             ) : (
-              <div className="h-[720px] overflow-y-auto space-y-2">
+              <div className="space-y-2">
                 {adminItems.map(lab => (
                   <AdminListItem key={lab._id} lab={lab}
                     isAdmin={isAdmin}

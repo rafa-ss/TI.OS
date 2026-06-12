@@ -3,6 +3,7 @@ const env = require('../config/env');
 const User = require('../models/User');
 const Kit = require('../models/Kit');
 const Laboratory = require('../models/Laboratory');
+const ServiceOrder = require('../models/ServiceOrder');
 const logger = require('./logger');
 const { connectDatabase } = require('../config/database');
 const { syncCounterToExisting, parseTermNumber } = require('../services/termNumber.service');
@@ -123,4 +124,35 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ensureAdmin, ensureDefaultKits, syncTermCounters, syncAllStations };
+/**
+ * Backfill: define o prazo de vencimento (dueDate) das O.S. que ainda não
+ * têm um, usando openedAt + 7 dias. Aplica-se às O.S. NÃO finalizadas para
+ * que as que já estão há mais de 1 semana em aberto passem a contar como
+ * "atrasadas" nos alertas. Idempotente.
+ */
+async function backfillOrderDueDates() {
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const orders = await ServiceOrder.find({
+    dueDate: { $in: [null, undefined] },
+    status: { $nin: ['finalizada', 'entregue', 'cancelada'] },
+  }).select('_id openedAt createdAt').lean();
+
+  if (orders.length === 0) {
+    return;
+  }
+
+  const ops = orders.map((o) => {
+    const base = new Date(o.openedAt || o.createdAt || Date.now());
+    return {
+      updateOne: {
+        filter: { _id: o._id },
+        update: { $set: { dueDate: new Date(base.getTime() + WEEK) } },
+      },
+    };
+  });
+
+  await ServiceOrder.bulkWrite(ops);
+  logger.info(`[seed] prazo de vencimento (1 semana) aplicado a ${ops.length} O.S. em aberto sem dueDate.`);
+}
+
+module.exports = { ensureAdmin, ensureDefaultKits, syncTermCounters, syncAllStations, backfillOrderDueDates };

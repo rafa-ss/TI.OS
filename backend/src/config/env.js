@@ -24,6 +24,9 @@ const env = {
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '300', 10),
 
+ // Quando 'true', NÃO renumera os Termos de Entrega na inicialização.
+ DISABLE_TERM_RENUMBER: String(process.env.DISABLE_TERM_RENUMBER || '').toLowerCase() === 'true',
+
  SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME || 'Administrador',
  SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL || 'admin@semec.abaetetuba.pa.gov.br',
  SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD || 'Admin@123',
