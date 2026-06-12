@@ -275,7 +275,7 @@ export default function Laboratories() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
           {/* --- 70%: Laboratórios de Informática (MAPA VISUAL) --- */}
-          <section className="lg:col-span-7 card p-4">
+          <section className="lg:col-span-7 card p-4 h-[830px]">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <Monitor size={18} className="text-indigo-600"/>
@@ -300,8 +300,8 @@ export default function Laboratories() {
           </section>
 
           {/* --- 30%: Setores Administrativos (LISTA COMPACTA) --- */}
-          <section className="lg:col-span-3 card p-4">
-            <div className="flex items-center justify-between mb-3">
+         <section className="lg:col-span-3 card p-4 h-[830px]  flex flex-col">
+            <div className="flex items-center justify-between mb-3 ">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <Briefcase size={18} className="text-sky-600"/>
                 Administrativos
@@ -313,7 +313,7 @@ export default function Laboratories() {
               <EmptyState title="Nenhum setor"
                 description="Cadastre um Setor Administrativo."/>
             ) : (
-              <div className="space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                 {adminItems.map(lab => (
                   <AdminListItem key={lab._id} lab={lab}
                     isAdmin={isAdmin}
