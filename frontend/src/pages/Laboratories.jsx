@@ -275,7 +275,7 @@ export default function Laboratories() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
           {/* --- 70%: Laboratórios de Informática (MAPA VISUAL) --- */}
-          <section className="lg:col-span-7 card p-4 h-[830px]">
+          <section className="lg:col-span-7 card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <Monitor size={18} className="text-indigo-600"/>
@@ -293,6 +293,7 @@ export default function Laboratories() {
                   <LabMapCard key={lab._id} lab={lab}
                     isAdmin={isAdmin}
                     onOpen={() => navigate(`/laboratorios/${lab._id}`)}
+                    onEdit={() => { setEditing(lab); setOpen(true); }}
                     onRemove={() => remove(lab)}/>
                 ))}
               </div>
@@ -300,8 +301,8 @@ export default function Laboratories() {
           </section>
 
           {/* --- 30%: Setores Administrativos (LISTA COMPACTA) --- */}
-         <section className="lg:col-span-3 card p-4 h-[830px]  flex flex-col">
-            <div className="flex items-center justify-between mb-3 ">
+          <section className="lg:col-span-3 card p-4">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <Briefcase size={18} className="text-sky-600"/>
                 Administrativos
@@ -313,11 +314,12 @@ export default function Laboratories() {
               <EmptyState title="Nenhum setor"
                 description="Cadastre um Setor Administrativo."/>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+              <div className="space-y-2">
                 {adminItems.map(lab => (
                   <AdminListItem key={lab._id} lab={lab}
                     isAdmin={isAdmin}
                     onOpen={() => setDetailing(lab)}
+                    onEdit={() => { setEditing(lab); setOpen(true); }}
                     onRemove={() => remove(lab)}/>
                 ))}
               </div>
@@ -354,7 +356,7 @@ export default function Laboratories() {
 // =============================================================
 // Card visual do "mapa" de Laboratórios (container 70%)
 // =============================================================
-function LabMapCard({ lab, isAdmin, onOpen, onRemove }) {
+function LabMapCard({ lab, isAdmin, onOpen, onEdit, onRemove }) {
   const { total, active, maintenance, defective, cells } = computeComputerStatus(lab);
 
   // Define o nº de colunas do mini-mapa conforme a quantidade (mantém quadradinho)
@@ -430,12 +432,20 @@ function LabMapCard({ lab, isAdmin, onOpen, onRemove }) {
       </div>
 
       {isAdmin && (
-        <span
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity btn-ghost p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded"
-          title="Excluir">
-          <Trash2 size={14}/>
-        </span>
+        <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="btn-ghost p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+            title="Editar laboratório">
+            <Pencil size={14}/>
+          </span>
+          <span
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="btn-ghost p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded"
+            title="Excluir">
+            <Trash2 size={14}/>
+          </span>
+        </div>
       )}
     </div>
   );
@@ -457,7 +467,7 @@ function Counter({ label, value, dot, className = '' }) {
 // =============================================================
 // Item de lista compacta de Setores Administrativos (container 30%)
 // =============================================================
-function AdminListItem({ lab, isAdmin, onOpen, onRemove }) {
+function AdminListItem({ lab, isAdmin, onOpen, onEdit, onRemove }) {
   const status = lab.status || 'planejado';
   const dot = {
     planejado: 'bg-slate-400',
@@ -480,11 +490,18 @@ function AdminListItem({ lab, isAdmin, onOpen, onRemove }) {
         <span className="text-[9px] font-mono text-slate-400 shrink-0">{lab.deliveryTermNumber}</span>
       )}
       {isAdmin && (
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost p-1 text-rose-500 shrink-0"
-          title="Excluir">
-          <Trash2 size={13}/>
-        </button>
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="btn-ghost p-1 text-slate-500"
+            title="Editar setor">
+            <Pencil size={13}/>
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="btn-ghost p-1 text-rose-500"
+            title="Excluir">
+            <Trash2 size={13}/>
+          </button>
+        </div>
       )}
     </div>
   );
