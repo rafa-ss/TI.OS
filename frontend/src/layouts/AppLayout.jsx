@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import OfflineSync from '../components/OfflineSync';
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
@@ -14,6 +15,8 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {/* Sincronização automática das O.S. criadas offline */}
+      <OfflineSync />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { User, Phone, AlertCircle, MonitorSmartphone, Archive } from 'lucide-rea
 import Modal from '../components/Modal';
 import SchoolCombobox from '../components/SchoolCombobox';
 import api from '../services/api';
+import { enqueueOrder, isNetworkError } from '../services/offlineQueue';
 import { useAuth } from '../context/AuthContext';
 import StaffPicker from '../components/StaffPicker';
 import {
@@ -134,10 +135,28 @@ export default function OrderFormModal({ open, onClose, order, onSaved, prefill 
       }
 
       Object.keys(payload).forEach(k => payload[k] === '' && delete payload[k]);
-      if (order) await api.put(`/orders/${order._id}`, payload);
-      else       await api.post('/orders', payload);
-      toast.success(order ? 'O.S. atualizada' : 'O.S. registrada — aguardando técnico iniciar');
-      onSaved?.();
+
+      if (order) {
+        // Edição: exige conexão (offline só permite CRIAR novas O.S.)
+        await api.put(`/orders/${order._id}`, payload);
+        toast.success('O.S. atualizada');
+        onSaved?.();
+      } else {
+        // Criação: tenta enviar; se estiver sem internet, guarda na fila offline.
+        try {
+          await api.post('/orders', payload);
+          toast.success('O.S. registrada — aguardando técnico iniciar');
+          onSaved?.();
+        } catch (err) {
+          if (isNetworkError(err)) {
+            enqueueOrder(payload);
+            toast.success('Sem internet — O.S. salva no aparelho. Será enviada automaticamente quando a conexão voltar.', { duration: 6000 });
+            onSaved?.();
+            return;
+          }
+          throw err; // erro de servidor/validação — trata abaixo
+        }
+      }
     } catch (err) {
       const data = err.response?.data;
       // Mostra exatamente quais campos falharam na validação do backend
