@@ -248,6 +248,15 @@ export default function Reports() {
             <Kpi label="Laboratórios" value={analytics.kpis.totalLabs} color="violet" icon={Monitor} />
           </div>
 
+          {/* ===== Seção 6 — Respaldo para Ponto (atividades externas) ===== */}
+                    <PontoSection
+                      show={showPonto}
+                      onToggle={() => setShowPonto((s) => !s)}
+                      isAdmin={isAdmin}
+                      user={user}
+                      staff={staff}
+                      range={{ from: filters.from, to: filters.to }}
+                    />
           {/* ===== Seção 1 — Desempenho Operacional ===== */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard title="O.S. por mês" icon={BarChart3}>
@@ -419,15 +428,7 @@ export default function Reports() {
             <Pagination page={history.page} totalPages={history.totalPages} onChange={setHistPage} />
           </div>
 
-          {/* ===== Seção 6 — Respaldo para Ponto (atividades externas) ===== */}
-          <PontoSection
-            show={showPonto}
-            onToggle={() => setShowPonto((s) => !s)}
-            isAdmin={isAdmin}
-            user={user}
-            staff={staff}
-            range={{ from: filters.from, to: filters.to }}
-          />
+          
         </>
       )}
     </div>
