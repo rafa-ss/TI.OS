@@ -144,8 +144,13 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
         {/* Mapa dos laboratórios — 80% */}
         <div className="xl:col-span-4">
-          <Panel title="Mapa dos Laboratórios" icon={Monitor} count={labs.mapa.length} to="/laboratorios"
-            className="noc-fixed flex flex-col">
+          <Panel
+            title="Mapa dos Laboratórios"
+            icon={Monitor}
+            count={labs.mapa.length}
+            to="/laboratorios"
+            className="flex flex-col"
+          >
             {labs.mapa.length === 0 ? (
               <Empty icon={Monitor} text="Nenhum laboratório cadastrado."/>
             ) : (
@@ -165,8 +170,14 @@ export default function Dashboard() {
         </div>
 
         {/* Central de alertas — 20% */}
-        <Panel title="Alertas" icon={Bell} count={alertas.length}
-          accent={critical > 0 ? 'rose' : 'slate'} className="noc-fixed flex flex-col">
+        <div className="xl:col-span-1">
+          <Panel
+            title="Alertas"
+            icon={Bell}
+            count={alertas.length}
+            accent={critical > 0 ? 'rose' : 'slate'}
+            className="h-full flex flex-col"
+          >
           {alertas.length === 0 ? (
             <Empty icon={CheckCircle2} text="Tudo sob controle."/>
           ) : (
@@ -186,8 +197,10 @@ export default function Dashboard() {
                 );
               })}
             </div>
+       
           )}
         </Panel>
+         </div>
       </div>
 
       {/* ===== Linha 2: Últimas O.S. (80%) + Mensagens (20%) — mesma altura fixa ===== */}
