@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, FileDown, FileText, Printer, Play, Trash2, Archive, AlertCircle, ArrowRight } from 'lucide-react';
+import { Plus, Search, Filter, FileDown, FileText, Printer, Play, Trash2, Archive, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -105,10 +105,24 @@ export default function Orders() {
   function canStart(order) {
     return order.status === 'aberta' && hasRole('admin', 'tecnico');
   }
+  function canDeliver(order) {
+    return order.status === 'finalizada' && hasRole('atendente');
+  }
   function canDelete(order) {
     if (hasRole('admin')) return true;
     const isAuthor = order.createdBy?._id === user?._id || order.createdBy === user?._id;
     return isAuthor && order.status === 'aberta';
+  }
+
+  async function deliverOrder(order) {
+    if (!confirm(`Confirmar a entrega da O.S. ${order.number}?`)) return;
+    try {
+      await api.patch(`/orders/${order._id}/status`, { status: 'entregue' });
+      toast.success('Entrega registrada com sucesso');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Erro');
+    }
   }
 
   async function downloadOrderPdf(order) {
@@ -166,7 +180,9 @@ export default function Orders() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {hasRole('tecnico') && !hasRole('admin')
               ? 'Você vê as O.S. abertas (livres para pegar) e as que você iniciou.'
-              : 'Acompanhe, abra e atualize chamados.'}
+              : hasRole('atendente')
+                ? 'Você pode abrir O.S. e registrar a entrega quando um técnico finalizar.'
+                : 'Acompanhe, abra e atualize chamados.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -330,6 +346,13 @@ export default function Orders() {
                             title="Baixar PDF"
                             className="btn-ghost p-1.5 text-brand-600">
                             <FileText size={14}/>
+                          </button>
+                        )}
+                        {canDeliver(o) && (
+                          <button onClick={(e) => { e.stopPropagation(); deliverOrder(o); }}
+                            title="Registrar entrega"
+                            className="btn-ghost p-1.5 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20">
+                            <CheckCircle2 size={14}/>
                           </button>
                         )}
                         {canDelete(o) && (

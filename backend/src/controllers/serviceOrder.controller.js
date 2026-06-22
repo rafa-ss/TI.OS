@@ -398,8 +398,11 @@ exports.start = asyncHandler(async (req, res) => {
 });
 
 /**
- * Mudar status — APENAS o técnico que iniciou (starter) ou admin.
- * Atendentes nunca podem.
+ * Mudar status — regra geral:
+ *  - admin: pode tudo
+ *  - técnico que iniciou (starter): pode mudar o fluxo operacional
+ *  - atendente: pode SOMENTE registrar a entrega, e apenas quando a O.S.
+ *    já estiver finalizada por um técnico/admin
  */
 exports.changeStatus = asyncHandler(async (req, res) => {
   const os = await ServiceOrder.findById(req.params.id)
@@ -407,15 +410,27 @@ exports.changeStatus = asyncHandler(async (req, res) => {
     .populate('createdBy', 'name role');
   if (!os) throw new AppError('O.S. não encontrada', 404);
 
+  const { status, note, diagnosis } = req.body;
   const isAdmin = req.user.role === 'admin';
-  if (!isAdmin && !isStarter(os, req.user)) {
+  const isOwnerTech = isStarter(os, req.user);
+  const isAttendantDelivery =
+    req.user.role === 'atendente' &&
+    os.status === 'finalizada' &&
+    status === 'entregue';
+
+  if (!isAdmin && !isOwnerTech && !isAttendantDelivery) {
+    if (req.user.role === 'atendente') {
+      throw new AppError(
+        'Atendentes só podem registrar a entrega após a finalização da O.S.',
+        403
+      );
+    }
     throw new AppError(
       'Apenas o técnico que iniciou esta O.S. (ou administrador) pode alterar o status.',
       403
     );
   }
 
-  const { status, note, diagnosis } = req.body;
   if (os.status === status) {
     return res.json({ success: true, order: os });
   }
@@ -426,7 +441,7 @@ exports.changeStatus = asyncHandler(async (req, res) => {
       throw new AppError('O diagnóstico técnico é obrigatório para finalizar a O.S.', 400);
     }
     os.diagnosis = finalDiag;
-  } else if (diagnosis !== undefined) {
+  } else if (diagnosis !== undefined && req.user.role !== 'atendente') {
     os.diagnosis = diagnosis;
   }
 
@@ -442,13 +457,15 @@ exports.changeStatus = asyncHandler(async (req, res) => {
     }
   }
 
+  const historyNote = note || (isAttendantDelivery ? `Entrega registrada por ${req.user.name}` : undefined);
+
   os.history.push({
     user: req.user._id, action: 'status_changed', field: 'status',
-    from: os.status, to: status, note,
+    from: os.status, to: status, note: historyNote,
   });
   os.status = status;
-  if (status === 'finalizada') os.closedAt = new Date();
-  if (status === 'entregue') os.deliveredAt = new Date();
+  if (status === 'finalizada' && !os.closedAt) os.closedAt = new Date();
+  if (status === 'entregue' && !os.deliveredAt) os.deliveredAt = new Date();
 
   await os.save();
 

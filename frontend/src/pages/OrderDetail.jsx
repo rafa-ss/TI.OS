@@ -44,6 +44,7 @@ export default function OrderDetail() {
 
   // ---------- regras de permissão (espelham o backend) ----------
   const isAdmin = hasRole('admin');
+  const isAttendant = hasRole('atendente');
   const isTechOrAdmin = hasRole('admin', 'tecnico');
   const isCreator = order && order.createdBy?._id === user?._id;
   const isStarter = order && order.technician?._id === user?._id;
@@ -63,6 +64,9 @@ export default function OrderDetail() {
 
   // Mudar status / finalizar: só quem iniciou OU admin
   const canChangeStatus = order && order.status !== 'aberta' && (isAdmin || isStarter);
+
+  // Atendente pode somente registrar a entrega quando a O.S. já foi finalizada
+  const canRegisterDelivery = order?.status === 'finalizada' && isAttendant;
 
   // Imprimir/baixar PDF: qualquer usuário, só quando finalizada
   const canPrint = isFinalized;
@@ -97,9 +101,13 @@ export default function OrderDetail() {
       setFinalizing(true);
       return;
     }
+    if (status === 'entregue' && isAttendant) {
+      const ok = confirm('Confirmar que a entrega desta O.S. foi realizada?');
+      if (!ok) return;
+    }
     try {
       await api.patch(`/orders/${id}/status`, { status });
-      toast.success('Status atualizado');
+      toast.success(status === 'entregue' ? 'Entrega registrada com sucesso' : 'Status atualizado');
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Erro');
@@ -213,6 +221,13 @@ export default function OrderDetail() {
             </select>
           )}
 
+          {/* ENTREGA — atendente só pode concluir a entrega após finalização técnica */}
+          {canRegisterDelivery && (
+            <button onClick={() => changeStatus('entregue')} className="btn-primary">
+              <CheckCircle2 size={16}/> Registrar entrega
+            </button>
+          )}
+
           {/* EDITAR */}
           {canEdit ? (
             <button onClick={() => setEditing(true)} className="btn-secondary">
@@ -249,10 +264,23 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {isFinalized && (
-        <div className="card p-4 border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-900/20">
+      {order.status === 'finalizada' && (
+        <div className="card p-4 border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 space-y-1">
           <p className="text-sm text-emerald-800 dark:text-emerald-200">
             ✅ Esta O.S. foi <b>finalizada</b>. Você pode baixar ou imprimir o PDF para arquivo.
+          </p>
+          {canRegisterDelivery && (
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+              Como atendente, agora você já pode clicar em <b>Registrar entrega</b>.
+            </p>
+          )}
+        </div>
+      )}
+
+      {order.status === 'entregue' && (
+        <div className="card p-4 border-l-4 border-l-teal-500 bg-teal-50 dark:bg-teal-900/20">
+          <p className="text-sm text-teal-800 dark:text-teal-200">
+            📦 Esta O.S. já foi <b>entregue</b> ao solicitante.
           </p>
         </div>
       )}
