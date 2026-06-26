@@ -1,10 +1,9 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const env = require('../config/env');
+const { ensurePrimaryUploadDir } = require('../utils/uploadPaths');
 
-const uploadDir = path.resolve(env.UPLOAD_LOCAL_DIR);
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+ensurePrimaryUploadDir();
 
 const memoryStorage = multer.memoryStorage();
 

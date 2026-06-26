@@ -1,9 +1,12 @@
+const fs = require('fs');
+const path = require('path');
 const asyncHandler = require('../utils/asyncHandler');
 const ServiceOrder = require('../models/ServiceOrder');
 const School = require('../models/School');
 const Equipment = require('../models/Equipment');
 const AppError = require('../utils/AppError');
 const { getPagination, paginate } = require('../utils/paginate');
+const { findExistingUploadFile } = require('../utils/uploadPaths');
 const storageService = require('../services/storage.service');
 const notificationService = require('../services/notification.service');
 const orderPdfService = require('../services/orderPdf.service');
@@ -538,6 +541,30 @@ exports.removeAttachment = asyncHandler(async (req, res) => {
   os.history.push({ user: req.user._id, action: 'attachment_removed' });
   await os.save();
   res.json({ success: true });
+});
+
+exports.viewAttachment = asyncHandler(async (req, res) => {
+  const os = await ServiceOrder.findById(req.params.id).select('attachments');
+  if (!os) throw new AppError('O.S. não encontrada', 404);
+
+  const att = os.attachments.id(req.params.attId);
+  if (!att) throw new AppError('Anexo não encontrado', 404);
+
+  if (att.storage === 'supabase' && /^https?:\/\//i.test(att.url || '')) {
+    return res.redirect(att.url);
+  }
+
+  const filePath = findExistingUploadFile(att);
+  if (!filePath || !fs.existsSync(filePath)) {
+    throw new AppError('Arquivo do anexo não encontrado no servidor', 404);
+  }
+
+  const safeName = String(att.name || path.basename(filePath)).replace(/"/g, '');
+  const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+
+  res.setHeader('Content-Type', att.mimeType || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+  return res.sendFile(filePath);
 });
 
 exports.remove = asyncHandler(async (req, res) => {

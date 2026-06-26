@@ -23,6 +23,7 @@ router.get('/:id/print', ctrl.printPdf);
 router.patch('/:id/status', validate({ body: statusSchema }), ctrl.changeStatus);
 router.post('/:id/comments', validate({ body: commentSchema }), ctrl.addComment);
 router.post('/:id/attachments', upload.array('files', 10), ctrl.uploadAttachments);
+router.get('/:id/attachments/:attId/view', ctrl.viewAttachment);
 router.delete('/:id/attachments/:attId', ctrl.removeAttachment);
 
 module.exports = router;

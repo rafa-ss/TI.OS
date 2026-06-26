@@ -5,10 +5,10 @@ const compression = require('compression');
 const morgan = require('morgan');
 const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
 
 const env = require('./config/env');
 const routes = require('./routes');
+const { getUploadDirs } = require('./utils/uploadPaths');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -76,7 +76,11 @@ app.use(
 );
 
 // Uploads locais (fallback quando Supabase não configurado)
-app.use('/uploads', express.static(path.resolve(env.UPLOAD_LOCAL_DIR)));
+// Serve o diretório canônico e também caminhos legados, para não quebrar
+// anexos antigos salvos quando o backend foi iniciado de outro diretório.
+getUploadDirs().forEach((dir) => {
+  app.use('/uploads', express.static(dir));
+});
 
 // Health raiz
 app.get('/', (_req, res) => {

@@ -3,8 +3,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const getSupabase = require('../config/supabase');
 const env = require('../config/env');
+const { ensurePrimaryUploadDir } = require('../utils/uploadPaths');
 
-const uploadDir = path.resolve(env.UPLOAD_LOCAL_DIR);
+const uploadDir = ensurePrimaryUploadDir();
 
 async function uploadFile(file, folder = 'misc') {
   const ext = path.extname(file.originalname);

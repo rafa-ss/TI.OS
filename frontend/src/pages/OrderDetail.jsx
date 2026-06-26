@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Upload, MessageSquare, Send, Paperclip, Trash2, History,
-  Pencil, Play, CheckCircle2, Lock, Printer, FileText
+  Pencil, Play, CheckCircle2, Lock, Printer, FileText, Eye, ExternalLink, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -21,6 +21,20 @@ const STATUSES_AFTER_START = [
   { v: 'cancelada', l: 'Cancelada' },
 ];
 
+function resolveAttachmentUrl(url) {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  return new URL(url, api.defaults.baseURL).toString();
+}
+
+function isPdfAttachment(att) {
+  return att?.mimeType === 'application/pdf' || /\.pdf($|\?)/i.test(att?.name || att?.url || '');
+}
+
+function isImageAttachment(att) {
+  return (att?.mimeType || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)($|\?)/i.test(att?.name || att?.url || '');
+}
+
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -30,6 +44,7 @@ export default function OrderDetail() {
   const [files, setFiles] = useState([]);
   const [editing, setEditing] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
   const { user, hasRole } = useAuth();
 
   const load = useCallback(async () => {
@@ -41,6 +56,10 @@ export default function OrderDetail() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => () => {
+    if (previewAttachment?.previewUrl) URL.revokeObjectURL(previewAttachment.previewUrl);
+  }, [previewAttachment]);
 
   // ---------- regras de permissão (espelham o backend) ----------
   const isAdmin = hasRole('admin');
@@ -169,6 +188,106 @@ export default function OrderDetail() {
     if (!confirm('Remover anexo?')) return;
     await api.delete(`/orders/${id}/attachments/${attId}`);
     load();
+  }
+
+  function attachmentEndpoint(att, { download = false } = {}) {
+    const attId = att?._id || att?.id;
+    if (!attId) return null;
+    const qs = download ? '?download=1' : '';
+    return `/orders/${id}/attachments/${attId}/view${qs}`;
+  }
+
+  async function parseBlobError(err) {
+    const blob = err?.response?.data;
+    if (blob instanceof Blob) {
+      try {
+        const text = await blob.text();
+        const parsed = JSON.parse(text);
+        const message = parsed?.message || parsed?.error;
+        if (message) return message;
+      } catch {}
+    }
+    return err?.response?.data?.message || err?.message || 'Erro ao carregar anexo';
+  }
+
+  async function fetchAttachmentBlob(att, options = {}) {
+    const endpoint = attachmentEndpoint(att, options);
+
+    if (endpoint) {
+      try {
+        const { data } = await api.get(endpoint, { responseType: 'blob' });
+        return data;
+      } catch (err) {
+        const status = err?.response?.status;
+        if (status && status !== 404) {
+          throw new Error(await parseBlobError(err));
+        }
+      }
+    }
+
+    const directUrl = resolveAttachmentUrl(att?.url);
+    if (directUrl) {
+      try {
+        const res = await fetch(directUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.blob();
+      } catch (err) {
+        throw new Error('Anexo não encontrado no servidor. Reenvie o arquivo para esta O.S.');
+      }
+    }
+
+    throw new Error('Anexo sem identificador ou URL válida');
+  }
+
+  async function openAttachmentPreview(att) {
+    if (!isPdfAttachment(att) && !isImageAttachment(att)) {
+      return downloadAttachment(att, { openAfterDownload: true });
+    }
+
+    try {
+      const blob = await fetchAttachmentBlob(att);
+      const previewUrl = URL.createObjectURL(blob);
+
+      setPreviewAttachment((prev) => {
+        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+        return {
+          ...att,
+          previewUrl,
+        };
+      });
+    } catch (err) {
+      toast.error(err.message || 'Erro ao abrir anexo');
+    }
+  }
+
+  function closeAttachmentPreview() {
+    setPreviewAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
+
+  async function downloadAttachment(att, { openAfterDownload = false } = {}) {
+    try {
+      const blob = await fetchAttachmentBlob(att, { download: true });
+      const fileUrl = URL.createObjectURL(blob);
+
+      if (openAfterDownload) {
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000);
+        return;
+      }
+
+      const a = document.createElement('a');
+      a.href = fileUrl;
+      a.download = att.name || 'anexo';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 10_000);
+    } catch (err) {
+      toast.error(err.message || 'Erro ao baixar anexo');
+    }
   }
 
   if (loading || !order) return <PageLoader />;
@@ -380,12 +499,47 @@ export default function OrderDetail() {
             </div>
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {order.attachments.length === 0 && <li className="py-3 text-sm text-slate-500">Nenhum anexo</li>}
-              {order.attachments.map(a => (
-                <li key={a._id} className="py-2 flex items-center justify-between text-sm">
-                  <a href={a.url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline truncate">{a.name}</a>
-                  <button onClick={() => removeAttachment(a._id)} className="btn-ghost text-rose-500 p-1.5"><Trash2 size={14}/></button>
-                </li>
-              ))}
+              {order.attachments.map(a => {
+                const canPreview = isPdfAttachment(a) || isImageAttachment(a);
+                return (
+                  <li key={a._id} className="py-3 flex items-center justify-between gap-3 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => openAttachmentPreview(a)}
+                        className="text-left text-brand-600 hover:underline truncate max-w-full font-medium"
+                        title={canPreview ? 'Visualizar anexo' : 'Abrir anexo'}
+                      >
+                        {a.name}
+                      </button>
+                      <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                        <span>{a.mimeType || 'arquivo'}</span>
+                        {a.size ? <span>• {(a.size / 1024 / 1024).toFixed(2)} MB</span> : null}
+                        {canPreview ? <span>• visualização disponível</span> : <span>• abrirá em nova aba</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openAttachmentPreview(a)}
+                        className="btn-ghost p-1.5 text-brand-600"
+                        title={canPreview ? 'Visualizar' : 'Abrir'}
+                      >
+                        {canPreview ? <Eye size={15}/> : <ExternalLink size={15}/>} 
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadAttachment(a)}
+                        className="btn-ghost p-1.5 text-slate-600 dark:text-slate-300"
+                        title="Baixar anexo"
+                      >
+                        <Download size={15}/>
+                      </button>
+                      <button onClick={() => removeAttachment(a._id)} className="btn-ghost text-rose-500 p-1.5" title="Remover anexo"><Trash2 size={14}/></button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -438,6 +592,12 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      <AttachmentPreviewModal
+        file={previewAttachment}
+        onClose={closeAttachmentPreview}
+        onDownload={downloadAttachment}
+      />
+
       <OrderFormModal
         open={editing}
         order={order}
@@ -470,6 +630,68 @@ function Block({ title, text }) {
       <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">{title}</p>
       <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{text || <span className="text-slate-400 italic">não informado</span>}</p>
     </div>
+  );
+}
+
+function AttachmentPreviewModal({ file, onClose, onDownload }) {
+  if (!file) return null;
+
+  const isPdf = isPdfAttachment(file);
+  const isImage = isImageAttachment(file);
+  const src = file.previewUrl || '';
+
+  return (
+    <Modal
+      open={!!file}
+      onClose={onClose}
+      size="xl"
+      title={`Visualizar anexo · ${file.name || 'arquivo'}`}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary">Fechar</button>
+          <button
+            onClick={() => src && window.open(src, '_blank', 'noopener,noreferrer')}
+            className="btn-secondary"
+          >
+            <ExternalLink size={16}/> Abrir em nova aba
+          </button>
+          <button onClick={() => onDownload?.(file)} className="btn-primary">
+            <Download size={16}/> Baixar
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="text-xs text-slate-500 flex flex-wrap gap-3">
+          <span><b>Arquivo:</b> {file.name}</span>
+          {file.mimeType ? <span><b>Tipo:</b> {file.mimeType}</span> : null}
+        </div>
+
+        {isPdf && (
+          <iframe
+            src={src}
+            title={file.name || 'PDF'}
+            className="w-full h-[70vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
+          />
+        )}
+
+        {isImage && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-3 flex justify-center">
+            <img
+              src={src}
+              alt={file.name || 'Imagem anexada'}
+              className="max-h-[70vh] w-auto rounded-lg shadow"
+            />
+          </div>
+        )}
+
+        {!isPdf && !isImage && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200 p-4 text-sm">
+            Este tipo de arquivo não possui visualização embutida. Use os botões acima para abrir ou baixar.
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
