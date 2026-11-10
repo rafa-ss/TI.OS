@@ -34,7 +34,7 @@ function GuidedConversation({ form, set, chatStep, setChatStep, onBack, onComple
     return form[q.key] || 'Nenhuma informação adicional';
   }
   return <div className="space-y-4">
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-soft">
       <div className="bg-brand-600 text-white px-4 py-3 flex items-center gap-3"><span className="p-2 bg-white/20 rounded-xl"><Bot size={20}/></span><div><p className="font-semibold">Assistente da TI</p><p className="text-xs text-white/80">Atendimento guiado · uma pergunta por vez</p></div></div>
       <div className="bg-slate-50 dark:bg-slate-950/50 p-4 space-y-4" aria-live="polite" aria-relevant="additions text">
         <div className="flex justify-start"><div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white dark:bg-slate-800 px-4 py-3 text-sm shadow-sm">Olá! Vou fazer algumas perguntas para ajudar a equipe de TI a entender o problema da escola.</div></div>
@@ -50,8 +50,8 @@ function GuidedConversation({ form, set, chatStep, setChatStep, onBack, onComple
           <button className="btn-primary">{current.key === 'description' ? 'Continuar para contato' : 'Enviar resposta'} <ArrowRight size={16}/></button>
         </form>}
       </div>
+      <div className="flex items-center justify-between gap-2 px-4 pb-4 bg-white dark:bg-slate-900"><button type="button" className="btn-secondary" onClick={previous}>{chatStep === 0 ? 'Voltar para escola' : 'Voltar à pergunta anterior'}</button><span className="text-xs text-slate-500">Pergunta {chatStep + 1} de {chatQuestions.length}</span></div>
     </div>
-    <div className="flex items-center justify-between gap-2"><button type="button" className="btn-secondary" onClick={previous}>{chatStep === 0 ? 'Voltar para escola' : 'Voltar à pergunta anterior'}</button><span className="text-xs text-slate-500">Pergunta {chatStep + 1} de {chatQuestions.length}</span></div>
   </div>;
 }
 
@@ -100,13 +100,13 @@ export default function InternetPublic() {
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4 py-8 sm:py-12">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-8"><div className="bg-brand-600 text-white p-3 rounded-2xl"><Wifi size={25}/></div><div><div className="text-xs font-bold tracking-widest text-brand-600 uppercase">CTEC · SEMEC</div><h1 className="text-xl sm:text-2xl font-bold">Internet das Escolas</h1></div></div>
-        <div className="card p-5 sm:p-8 space-y-5">
+        <div className={isTracking || step !== 2 ? "card p-5 sm:p-8 space-y-5" : "space-y-5"}>
           {isTracking ? <>
             <div><p className="text-sm text-brand-600 font-semibold">Acompanhamento</p><h2 className="text-2xl font-bold mt-1">Sua solicitação</h2></div>
             {busy && <p>Consultando a solicitação...</p>}
             {tracking && <><p className="text-slate-600 dark:text-slate-300">Escola: <strong>{tracking.schoolName}</strong></p><div className="space-y-4">{stages.map(([key, label], index) => { const active = stages.findIndex(s => s[0] === tracking.status) >= index; const d = [tracking.createdAt, tracking.verifiedAt, tracking.forwardedAt][index]; return <div key={key} className={`flex items-start gap-3 rounded-xl p-4 ${active ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-slate-100 dark:bg-slate-800'}`}><CheckCircle2 size={20} className={active ? 'text-emerald-600 shrink-0' : 'text-slate-400 shrink-0'}/><div><strong>{label}</strong>{d && <p className="text-sm text-slate-500">{date(d)}</p>}</div></div>; })}</div><p className="text-sm text-slate-500">O encaminhamento não significa que o problema já foi resolvido pelo provedor.</p><p className="text-sm text-slate-500">Guarde este link em local seguro. Qualquer pessoa com ele poderá acompanhar a solicitação.</p></>}
           </> : <>
-            {step < 4 && <><div><p className="text-sm font-semibold text-brand-600">Atendimento para gestores escolares</p><h2 className="text-2xl font-bold mt-1">Vamos informar a equipe de TI?</h2><p className="text-sm text-slate-500 mt-2">Conte o que está acontecendo. A TI verificará sua solicitação e, quando necessário, a encaminhará ao provedor.</p></div><div className="text-xs font-semibold text-slate-500">ETAPA {Math.min(step + 1, 4)} DE 4</div></>}
+            {step < 4 && step !== 2 && <><div><p className="text-sm font-semibold text-brand-600">Atendimento para gestores escolares</p><h2 className="text-2xl font-bold mt-1">Vamos informar a equipe de TI?</h2><p className="text-sm text-slate-500 mt-2">Conte o que está acontecendo. A TI verificará sua solicitação e, quando necessário, a encaminhará ao provedor.</p></div><div className="text-xs font-semibold text-slate-500">ETAPA {Math.min(step + 1, 4)} DE 4</div></>}
             {step === 0 && <form onSubmit={lookup} className="space-y-4"><label className="label" htmlFor="inep">Qual é o INEP da escola?</label><input id="inep" className="input" inputMode="numeric" value={inep} onChange={e => setInep(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 dígitos" pattern="[0-9]{8}" required/><button className="btn-primary" disabled={busy}>{busy ? 'Buscando...' : 'Buscar escola'} <ArrowRight size={16}/></button></form>}
             {step === 1 && <div className="space-y-4"><p>Encontramos esta escola. Está correta?</p><div className="rounded-xl bg-brand-50 dark:bg-slate-800 p-4"><strong>{school.name}</strong><p className="text-sm text-slate-500">INEP {school.inep}</p></div><div className="flex gap-2"><button className="btn-secondary" onClick={() => setStep(0)}>Corrigir INEP</button><button className="btn-primary" onClick={() => setStep(2)}>Sim, continuar</button></div></div>}
             {step === 2 && <GuidedConversation form={form} set={set} chatStep={chatStep} setChatStep={setChatStep} onBack={() => setStep(1)} onComplete={() => { setError(''); setStep(3); }} />}
@@ -115,7 +115,7 @@ export default function InternetPublic() {
           </>}
           {error && <p role="alert" className="rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 p-3 text-sm">{error}</p>}
         </div>
-        <p className="text-center text-xs text-slate-500 mt-6">Atendimento da equipe de TI · SEMEC</p>
+        {(isTracking || step !== 2) && <p className="text-center text-xs text-slate-500 mt-6">Atendimento da equipe de TI · SEMEC</p>}
         {isTracking && <div className="text-center mt-3"><Link to="/internet-escolas" className="text-sm text-brand-600 underline">Abrir outra solicitação</Link></div>}
       </div>
     </main>
