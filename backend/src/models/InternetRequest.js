@@ -12,6 +12,17 @@ const internetRequestSchema = new mongoose.Schema({
   since: { type: String, required: true },
   status: { type: String, enum: ['recebida', 'verificada', 'encaminhada'], default: 'recebida', index: true },
   trackingHash: { type: String, required: true, unique: true, select: false },
+  installation: {
+    siteName: { type: String, default: '' },
+    address: { type: String, default: '' },
+    equipmentCount: { type: String, default: '' },
+    equipmentCountOther: { type: String, default: '' },
+    gponStatus: { type: String, default: '' },
+    identifiers: [{ number: String, location: String, _id: false }],
+  },
+  // Imagens mantidas no MongoDB, nunca no diretório público /uploads.
+  photos: { type: [{ data: Buffer, mimeType: String, _id: false }], select: false, default: [] },
+  photoCount: { type: Number, default: 0 },
   verifiedAt: Date,
   verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   forwardedAt: Date,

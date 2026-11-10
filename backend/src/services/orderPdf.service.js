@@ -173,4 +173,5 @@ function paragraph(doc, text) {
     });
 }
 
-module.exports = { buildOrderPdf };
+// Exporta os helpers existentes para outros documentos usarem o mesmo modelo.
+module.exports = { buildOrderPdf, paintHeaderFooter, sectionTitle, labelValue, paragraph };

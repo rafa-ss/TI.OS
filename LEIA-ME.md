@@ -1,7 +1,9 @@
-# Ajuste visual do assistente
+# Remoção do aviso final do PDF
 
-Esta atualização altera somente `frontend/src/pages/InternetPublic.jsx` e depende da versão com a conversa guiada já instalada.
+Esta atualização depende da versão anterior do documento da Online Telecom com o modelo das O.S. e informações simplificadas.
 
-Na etapa das perguntas, aparecem o cabeçalho “Internet das Escolas” e o Assistente da TI. Os textos introdutórios, o cartão externo e o rodapé dessa etapa foram removidos. Os botões para voltar e o contador continuam dentro do assistente para permitir a navegação. As outras etapas, incluindo identificação da escola, confirmação dos dados e acompanhamento, continuam disponíveis.
+Copie `backend/src/services/internetProviderPdf.service.js` para o mesmo caminho no seu projeto no VS Code. Faça backup e compare o arquivo atual antes de substituí-lo. Reinicie o backend e gere um novo PDF. Arquivos PDF já baixados não são alterados.
 
-Faça backup e compare o arquivo com sua cópia no VS Code antes de substituir. Atualize o frontend no seu ambiente e teste o fluxo completo. A aplicação e o build não foram executados aqui.
+Foi removida apenas a frase “As informações acima foram prestadas pela escola e devem ser conferidas pela equipe da CTEC antes do encaminhamento.” do final do PDF. O aviso na tela de prévia continua, assim como o conteúdo da solicitação, cabeçalho, rodapé e fotos opcionais.
+
+Foi gerado um PDF de teste isolado e verificado que a frase não aparece. O sistema completo não foi executado aqui.
