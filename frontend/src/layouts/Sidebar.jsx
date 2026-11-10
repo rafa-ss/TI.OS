@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, MonitorSmartphone,Package, School, Users,
-  BarChart3, FlaskConical, MessageCircle, UserCircle, X
+  BarChart3, FlaskConical, MessageCircle, UserCircle, Wifi, X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,6 +12,7 @@ const items = [
   { to: '/equipamentos', label: 'Equipamentos', icon: Package, roles: ['admin', 'tecnico'] },
    { to: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'tecnico'] },
   { to: '/escolas', label: 'Escolas', icon: School, roles: ['admin', 'tecnico', 'atendente'] },
+  { to: '/internet', label: 'Internet das Escolas', icon: Wifi, roles: ['admin', 'tecnico', 'atendente'] },
   { to: '/chat', label: 'Chat da Equipe', icon: MessageCircle, roles: ['admin', 'tecnico', 'atendente'] },
   { to: '/usuarios', label: 'Usuários', icon: Users, roles: ['admin'] },
 

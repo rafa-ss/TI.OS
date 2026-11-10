@@ -14,11 +14,15 @@ import EquipmentDetail from './pages/EquipmentDetail';
 import Schools from './pages/Schools';
 import Users from './pages/Users';
 import Reports from './pages/Reports';
+import InternetRequests from './pages/InternetRequests';
+import InternetPublic from './pages/InternetPublic';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/internet-escolas" element={<InternetPublic />} />
+      <Route path="/internet-escolas/acompanhar" element={<InternetPublic />} />
 
       <Route
         path="/"
@@ -39,6 +43,7 @@ export default function App() {
         <Route path="kits" element={<Navigate to="/equipamentos" replace />} />
         <Route path="equipamentos/:id" element={<ProtectedRoute roles={['admin','tecnico']}><EquipmentDetail /></ProtectedRoute>} />
         <Route path="escolas" element={<Schools />} />
+        <Route path="internet" element={<ProtectedRoute roles={['admin', 'tecnico', 'atendente']}><InternetRequests /></ProtectedRoute>} />
         <Route path="chat" element={<Chat />} />
         <Route path="perfil" element={<Profile />} />
         <Route path="relatorios" element={<ProtectedRoute roles={['admin','tecnico']}><Reports /></ProtectedRoute>} />
