@@ -178,12 +178,14 @@ export default function InternetPublic() {
         <rect width="1440" height="900" fill="#00132e"/><ellipse cx="680" cy="385" rx="810" ry="610" fill="url(#portal-glow)"/><path d="M0 0 H225 C135 40 65 80 0 137 Z" fill="url(#portal-blue)" opacity=".8"/><path d="M1440 128 C1373 173 1342 255 1236 300 L1440 240 Z" fill="url(#portal-blue)" opacity=".8"/><path d="M0 820 C160 710 229 680 360 672 L45 900 H0 Z" fill="url(#portal-blue)" opacity=".7"/><path d="M1440 725 C1326 772 1279 847 1210 900 H1440 Z" fill="url(#portal-blue)" opacity=".7"/>
       </svg>
       <div className="relative mx-auto w-full max-w-[880px] overflow-hidden rounded-[22px] border border-[#17437c] bg-[#00132f]/95 shadow-[0_20px_65px_rgba(0,0,0,0.35)]">
-        <header className="flex items-center justify-between gap-3 border-b border-[#184278] bg-gradient-to-r from-[#082654] to-[#06366f] px-4 py-3 sm:px-7 sm:py-4">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-5"><BookOpen size={37} strokeWidth={1.8} className="shrink-0 text-white" aria-hidden="true"/><span aria-hidden="true" className="h-10 w-px shrink-0 bg-sky-300/80"/><div className="min-w-0"><p className="text-sm font-extrabold leading-tight text-white sm:text-base">SEMEC ABAETETUBA</p><p className="mt-1 text-[11px] leading-snug text-blue-100 sm:text-xs">CTEC – Coordenação de Tecnologia Educacional</p></div></div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-900/60 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-400"/>Atendimento</span>
+        <header className="border-b border-[#184278] bg-gradient-to-r from-[#082654] to-[#06366f] px-4 py-4 sm:px-7 sm:py-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5"><BookOpen size={37} strokeWidth={1.8} className="shrink-0 text-white" aria-hidden="true"/><span aria-hidden="true" className="h-10 w-px shrink-0 bg-sky-300/80"/><div className="min-w-0"><p className="text-sm font-extrabold leading-tight text-white sm:text-base">SEMEC ABAETETUBA</p><p className="mt-1 text-[11px] leading-snug text-blue-100 sm:text-xs">CTEC – Coordenação de Tecnologia Educacional</p></div></div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-900/60 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-400"/>Atendimento</span>
+          </div>
+          <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-400/30 bg-[#073774] text-sky-300"><Wifi size={20} aria-hidden="true"/></span><h1 className="text-lg font-bold text-white sm:text-xl">Internet das Escolas</h1></div>
         </header>
         <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="mb-6 flex items-center gap-3"><div className="rounded-2xl border border-[#1b4e87] bg-[#073774] p-3 text-sky-300"><Wifi size={25} aria-hidden="true"/></div><div><div className="text-xs font-bold uppercase tracking-widest text-sky-300">CTEC · SEMEC</div><h1 className="text-xl font-bold text-white sm:text-2xl">Internet das Escolas</h1></div></div>
         <div className={isTracking || step !== 2 ? 'card p-5 sm:p-8 space-y-5' : 'space-y-5'}>
           {isTracking ? <>
             <div><p className="text-sm text-brand-600 font-semibold">Acompanhamento</p><h2 className="text-2xl font-bold mt-1">Sua solicitação</h2></div>
