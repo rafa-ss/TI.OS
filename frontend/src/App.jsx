@@ -16,12 +16,13 @@ import Users from './pages/Users';
 import Reports from './pages/Reports';
 import InternetRequests from './pages/InternetRequests';
 import InternetPublic from './pages/InternetPublic';
+import InternetNotice from './pages/InternetNotice';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/internet-escolas" element={<InternetPublic />} />
+      <Route path="/internet-escolas" element={<InternetNotice />} />
       <Route path="/internet-escolas/acompanhar" element={<InternetPublic />} />
 
       <Route

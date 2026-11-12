@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const multer = require('multer');
 const { z } = require('zod');
 const ExcelJS = require('exceljs');
@@ -110,6 +111,37 @@ router.get('/requests', asyncHandler(async (req, res) => {
     InternetRequest.countDocuments(filter),
   ]);
   res.json({ success: true, items, pagination: { page, total, totalPages: Math.max(1, Math.ceil(total / limit)) } });
+}));
+// Confirmação explícita do endereço por administrador; o envio público nunca atualiza School.
+async function addressProposal(id) {
+  if (!mongoose.isValidObjectId(id)) throw new AppError('Solicitação inválida.', 400);
+  const item = await InternetRequest.findOne({ _id: id, deletedAt: null }).select('school schoolName inep installation.address').lean();
+  if (!item) throw new AppError('Solicitação não encontrada.', 404);
+  const address = item.installation?.address?.trim();
+  if (!address || address.length < 8 || address.length > 400) throw new AppError('Esta solicitação não possui endereço válido para confirmação.', 400);
+  const school = await School.findOne({ _id: item.school, inep: item.inep }).select('name inep endereco').lean();
+  if (!school) throw new AppError('Escola vinculada não encontrada ou INEP alterado. Verifique o cadastro.', 404);
+  return { item, school, address };
+}
+router.get('/requests/:id/address-proposal', authorize('admin'), asyncHandler(async (req, res) => {
+  const { school, address } = await addressProposal(req.params.id);
+  res.set('Cache-Control', 'no-store').json({ success: true, schoolName: school.name, inep: school.inep, currentAddress: school.endereco || '', proposedAddress: address });
+}));
+router.post('/requests/:id/address-confirmation', authorize('admin'), asyncHandler(async (req, res) => {
+  const data = parsed(z.object({ currentAddress: z.string().max(4000), proposedAddress: text(8, 400) }).strict(), req.body);
+  const { school, item, address } = await addressProposal(req.params.id);
+  const current = school.endereco || '';
+  if (data.currentAddress !== current || data.proposedAddress !== address) throw new AppError('O endereço cadastrado ou informado mudou. Confira novamente antes de confirmar.', 409);
+  if (current === address) throw new AppError('Este endereço já consta no cadastro da escola.', 409);
+  // Atualização condicional e histórico no mesmo documento, evitando sobrescrever uma alteração concorrente.
+  const match = current === '' ? { $in: ['', null] } : current;
+  const updated = await School.findOneAndUpdate(
+    { _id: school._id, inep: item.inep, endereco: match },
+    { $set: { endereco: address }, $push: { internetAddressHistory: { previous: current, updated: address, request: item._id, confirmedBy: req.user._id, confirmedAt: new Date() } } },
+    { new: true, runValidators: true }
+  ).select('name inep endereco').lean();
+  if (!updated) throw new AppError('O cadastro mudou durante a confirmação. Confira novamente.', 409);
+  res.set('Cache-Control', 'no-store').json({ success: true, schoolName: updated.name, inep: updated.inep, address: updated.endereco });
 }));
 // Documento gerado sob demanda; não altera o status nem envia ao provedor.
 router.get('/requests/:id/provider-draft', asyncHandler(async (req, res) => {

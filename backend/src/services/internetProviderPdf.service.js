@@ -5,7 +5,7 @@ const { paintHeaderFooter, sectionTitle, labelValue, paragraph } = require('./or
 // Os campos da conversa são armazenados em texto rotulado. Pedidos antigos
 // podem conter somente texto livre; nesse caso o texto original é preservado.
 function parseConversation(description = '') {
-  const known = new Set(['Problema', 'Locais afetados', 'Local informado', 'Horário aproximado', 'Frequência', 'Teste em outro aparelho', 'Verificação do Wi-Fi', 'Luzes do equipamento', 'Falta de energia', 'Contato anterior com a TI', 'Protocolo anterior', 'Informações adicionais', 'Resultado das verificações', 'Abrangência', 'Luzes do modem/roteador']);
+  const known = new Set(['Problema', 'Locais afetados', 'Local informado', 'Horário aproximado', 'Frequência', 'Teste em outro aparelho', 'Verificação do Wi-Fi', 'Luzes do equipamento', 'Falta de energia', 'Contato anterior com a TI', 'Protocolo anterior', 'Informações adicionais', 'Resultado das verificações', 'Condição para reiniciar', 'Reinício do equipamento', 'Abrangência', 'Luzes do modem/roteador']);
   const values = {}; let current = null; let found = false;
   for (const line of String(description).split(/\r?\n/)) {
     const colon = line.indexOf(':');
@@ -55,6 +55,10 @@ function buildNarrative(item) {
   if (meaningful(lights)) checks.push(lightText[lights] || `Quanto às luzes do equipamento, foi informado: ${lights}.`);
   const power = { 'Sim': 'A gestão informou que houve falta ou oscilação de energia antes do problema.', 'Não': 'A gestão informou que não houve falta ou oscilação de energia antes do problema.', 'Não sei informar': 'A gestão não soube informar se houve falta ou oscilação de energia antes do problema.' };
   if (meaningful(answers['Falta de energia'])) checks.push(power[answers['Falta de energia']] || `Sobre falta ou oscilação de energia, foi informado: ${answers['Falta de energia']}.`);
+  const restart = { 'Reiniciei uma vez': 'A gestão informou que reiniciou o equipamento uma vez.', 'Não consegui ou não foi seguro': 'A gestão informou que não conseguiu reiniciar o equipamento ou considerou que não era seguro.' };
+  if (meaningful(answers['Reinício do equipamento'])) checks.push(restart[answers['Reinício do equipamento']] || `Sobre o reinício do equipamento, foi informado: ${answers['Reinício do equipamento']}.`);
+  else if (answers['Condição para reiniciar'] === 'Não sei qual é o equipamento') checks.push('A gestão informou que não soube identificar o equipamento a ser reiniciado.');
+  else if (answers['Condição para reiniciar'] === 'Não posso ou não sei se é seguro') checks.push('A gestão informou que não podia reiniciar o equipamento ou não sabia se era seguro.');
   const result = { 'Não, continua com problema': 'Após essas verificações, a gestão informou que o problema continuou.', 'Não sei': 'A gestão não soube informar se a conexão voltou após as verificações.', 'Sim, voltou': 'Após as verificações, a gestão informou que a conexão voltou a funcionar.' };
   if (meaningful(answers['Resultado das verificações'])) checks.push(result[answers['Resultado das verificações']] || `Após as verificações, foi informado: ${answers['Resultado das verificações']}.`);
   if (checks.length) paragraphs.push(checks.join(' '));

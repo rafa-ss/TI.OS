@@ -10,6 +10,8 @@ const schoolSchema = new mongoose.Schema(
     dependenciaAdm: { type: String, default: '' },
     localizacao: { type: String, default: '' },
     endereco: { type: String, default: '' },
+    // Histórico das confirmações feitas a partir de solicitações do canal público.
+    internetAddressHistory: { type: [{ previous: String, updated: String, request: { type: mongoose.Schema.Types.ObjectId, ref: 'InternetRequest' }, confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, confirmedAt: Date, _id: false }], default: [], select: false },
     importedFrom: { type: String, default: '' },
     lastImportedAt: { type: Date },
   },

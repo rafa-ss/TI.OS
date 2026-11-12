@@ -1,0 +1,45 @@
+/* Identidade do canal público, sem alterar o tema da área interna. */
+.internet-portal.internet-portal { color-scheme: dark; }
+.internet-portal.internet-portal .card {
+  background: #061b3b; border-color: #173e70; color: #f1f5f9;
+  box-shadow: 0 12px 32px rgba(0, 8, 26, .24);
+}
+.internet-portal.internet-portal .label { color: #e2e8f0; }
+.internet-portal.internet-portal .input {
+  background: #03152f; color: #fff; border-color: #285388;
+}
+.internet-portal.internet-portal .input::placeholder { color: #a4b9d2; }
+.internet-portal.internet-portal .input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.25); }
+.internet-portal.internet-portal .btn-primary {
+  border: 1px solid #38a8f5; border-radius: 9999px;
+  background: linear-gradient(180deg, #13b7f8, #0753d6); color: #fff;
+  box-shadow: 0 0 16px rgba(0,126,255,.27);
+}
+.internet-portal.internet-portal .btn-primary:hover:not(:disabled) { filter: brightness(1.12); }
+.internet-portal.internet-portal .btn-secondary {
+  border: 1px solid #3982bb; border-radius: 9999px; background: #08254b; color: #f1f5f9;
+}
+.internet-portal.internet-portal .btn-secondary:hover:not(:disabled) { background: #123b6a; }
+.internet-portal.internet-portal :is(button, a, input, textarea):focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
+.internet-portal.internet-portal .text-slate-500,
+.internet-portal.internet-portal .text-slate-600,
+.internet-portal.internet-portal .text-slate-700 { color: #c2d1e4; }
+.internet-portal.internet-portal .text-brand-600,
+.internet-portal.internet-portal .text-brand-700 { color: #7dd3fc; }
+.internet-portal.internet-portal .bg-slate-50,
+.internet-portal.internet-portal .bg-slate-100,
+.internet-portal.internet-portal .bg-brand-50 { background-color: #0a2a53; }
+.internet-portal.internet-portal .border-slate-200,
+.internet-portal.internet-portal .border-slate-700 { border-color: #285388; }
+.internet-portal.internet-portal .bg-emerald-50 { background-color: #064337; }
+.internet-portal.internet-portal .text-emerald-600 { color: #6ee7b7; }
+.internet-portal.internet-portal .bg-amber-50 { background-color: #49300d; }
+.internet-portal.internet-portal .text-amber-800 { color: #fde68a; }
+.internet-portal.internet-portal .bg-rose-50 { background-color: #4c1628; }
+.internet-portal.internet-portal .text-rose-700,
+.internet-portal.internet-portal .text-rose-600 { color: #fda4af; }
+.internet-portal.internet-portal input[type='file']::file-selector-button {
+  background: #0868ce; color: white; cursor: pointer;
+}
+.internet-portal.internet-portal .bg-white { background-color: #0a2a53; }
+.internet-portal.internet-portal .bg-brand-600 { background-color: #0754a3; }
